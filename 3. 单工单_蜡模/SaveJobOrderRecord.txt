@@ -1,0 +1,203 @@
+'Option Explicit
+
+'Dim Start, oParent, currentWO, lastWO, count
+'' 1. 获取父对象引用
+'Set oParent = PnGetObjectEx("#PARENT")
+'' 2. 获取运行状态 (布尔值)
+'Start = PnGetValue("#PARENT.Working")
+
+'PnTrace "--------------------------------------------------"
+'PnTrace ">>> [脚本触发] 设备当前 Working 状态: " & Start
+
+'' ============================================================
+'' 逻辑 A：启动瞬间 (Start = True) -> 核心：动态生成零件号 A0
+'' ============================================================
+'If Start = True Then
+'    currentWO = Trim(oParent.A1 & "")   ' 获取当前输入的工单 (例如: VA001)
+'    lastWO = Trim(oParent.A1_1 & "")    ' 获取上一次运行时的工单
+    
+'    ' A.1 检查工单号 A1 是否为空
+'    If currentWO = "" Then
+'        PnTrace ">>> [拦截] 警告：工单(A1)为空，无法生成零件号！"
+'        oParent.A0 = "MISSING-WO" ' 提示需要输入工单
+'    Else
+'        ' A.2 判断工单是否切换
+'        ' 如果当前工单与上次不同，说明是新工单，序号从1开始
+'        If currentWO <> lastWO Then
+'            PnTrace ">>> [检测] 工单变更或新工单，重置序号为 01"
+'            count = 1
+'            oParent.A1_1 = currentWO   ' 记录此工单，用于下次比对
+'        Else
+'            ' 如果工单没变，读取 A0_1 中的数值并累加
+'            count = CInt("0" & oParent.A0_1) + 1
+'            PnTrace ">>> [检测] 同一工单继续，当前序号递增至: " & count
+'        End If
+
+'        ' A.3 将最新的计数值存回 A0_1 (保存状态)
+'        oParent.A0_1 = CStr(count)
+
+'        ' A.4 【核心步骤】动态生成 A0 (VA001 + -P + 01)
+'        ' Right("0" & count, 2) 确保序号是两位，如 01, 02... 10
+'        oParent.A0 = currentWO & "-P" & Right("0" & count, 2)
+        
+'        ' A.5 记录开始时间
+'        oParent.A2 = CDate(Now)
+        
+'        PnTrace ">>> [结果] 当前工单: " & currentWO
+'        PnTrace ">>> [结果] 生成零件号(A0): " & oParent.A0
+'        PnTrace ">>> [结果] 开始时间(A2): " & oParent.A2
+'    End If
+'End If
+
+'' ============================================================
+'' 逻辑 B：停止瞬间 (Start = False) -> 保存并入库
+'' ============================================================
+'If Start = False Then
+'    ' B.1 校验 A0 是否有效，防止在没有工单的情况下停止时触发写入
+'    If Trim(oParent.A0 & "") = "" Or oParent.A0 = "MISSING-WO" Then
+'        PnTrace ">>> [跳过] 无效的零件号，取消写入数据库。"
+'    Else
+'        PnTrace ">>> [停止] 准备保存数据，零件: " & oParent.A0
+        
+'        ' B.2 记录结束时间
+'        oParent.A3 = CDate(Now)
+        
+'        ' B.3 数据库插入逻辑
+'        Dim oEditObject
+'        Set oEditObject = PnGetObjectEx("Edit_JobOrder")
+
+'        If oEditObject Is Nothing Then
+'            PnTrace ">>> [严重错误] 找不到 Edit_JobOrder 控件！"
+'        Else
+'            oEditObject.ApplicationToDataBase = True
+'            PnSleep 500 ' 等待数据刷新
+'            oEditObject.DataBaseInsert = True   
+'            PnTrace ">>> [成功] 数据已提交至数据库 (DataBaseInsert)"
+'        End If
+        
+'        ' B.4 界面清理
+'        ' 注意：不要清除 A1(工单号) 和 A1_1 以及 A0_1
+'        ' 这样下次启动时可以继续在当前工单基础上 +1
+'        oParent.A0 = "" 
+'        PnTrace ">>> [清理] A0 已重置，等待下次运行。"
+'    End If
+'End If
+Option Explicit
+
+Dim Start, oParent, currentWO, lastWO, count
+Dim sRecordUser
+Dim oEditObject
+
+' 1. 获取父对象引用
+Set oParent = PnGetObjectEx("#PARENT")
+
+If (oParent Is Nothing) Then
+	PnTrace ">>> [严重错误] 父对象未找到！"
+	This.Active = False
+End If
+
+' 2. 获取运行状态
+Start = PnGetValue("#PARENT.Working")
+
+PnTrace "--------------------------------------------------"
+PnTrace ">>> [脚本触发] 设备当前 Working 状态: " & CStr(Start)
+
+' ============================================================
+' 逻辑 A：启动瞬间 (Start = True) -> 生成零件号 A0，并固化用户
+' ============================================================
+If Start = True Then
+	currentWO = Trim(oParent.A1 & "")   ' 当前输入工单
+	lastWO = Trim(oParent.A1_1 & "")    ' 上一次运行工单
+    
+	' A.1 检查工单号 A1 是否为空
+	If currentWO = "" Then
+		PnTrace ">>> [拦截] 警告：工单(A1)为空，无法生成零件号！"
+		oParent.A0 = "MISSING-WO"
+	Else
+		' A.2 判断工单是否切换
+		If currentWO <> lastWO Then
+			PnTrace ">>> [检测] 工单变更或新工单，重置序号为 01"
+			count = 1
+			oParent.A1_1 = currentWO
+		Else
+			count = CInt("0" & oParent.A0_1) + 1
+			PnTrace ">>> [检测] 同一工单继续，当前序号递增至: " & count
+		End If
+
+		' A.3 保存最新计数
+		oParent.A0_1 = CStr(count)
+
+		' A.4 动态生成零件号 A0
+		oParent.A0 = currentWO & "-P" & Right("0" & count, 2)
+
+		' A.5 记录开始时间
+		oParent.A2 = CDate(Now)
+
+		' A.6 固化首次输入用户到数据库操作员字段（假设 A5 为 Operator）
+		sRecordUser = Trim(oParent.First_Input_User & "")
+		If sRecordUser = "" Then
+			sRecordUser = "AUTO"
+		End If
+		oParent.A5 = sRecordUser
+        
+		PnTrace ">>> [结果] 当前工单: " & currentWO
+		PnTrace ">>> [结果] 生成零件号(A0): " & oParent.A0
+		PnTrace ">>> [结果] 开始时间(A2): " & CStr(oParent.A2)
+		PnTrace ">>> [结果] 固化操作员(A5): " & CStr(oParent.A5)
+	End If
+End If
+
+' ============================================================
+' 逻辑 B：停止瞬间 (Start = False) -> 保存并入库
+' ============================================================
+If Start = False Then
+	' B.1 校验 A0 是否有效
+	If Trim(oParent.A0 & "") = "" Or oParent.A0 = "MISSING-WO" Then
+		PnTrace ">>> [跳过] 无效的零件号，取消写入数据库。"
+	Else
+		PnTrace ">>> [停止] 准备保存数据，零件: " & oParent.A0
+        
+		' B.2 记录结束时间
+		oParent.A3 = CDate(Now)
+
+		' B.3 再次固化用户，确保数据库对象读取正确
+		sRecordUser = Trim(oParent.First_Input_User & "")
+		If sRecordUser = "" Then
+			sRecordUser = Trim(oParent.A5 & "")
+		End If
+		If sRecordUser = "" Then
+			sRecordUser = "AUTO"
+		End If
+		oParent.A5 = sRecordUser
+
+		PnTrace ">>> [写库快照] A0=" & CStr(oParent.A0) & _
+			", A1=" & CStr(oParent.A1) & _
+			", A2=" & CStr(oParent.A2) & _
+			", A3=" & CStr(oParent.A3) & _
+			", A5=" & CStr(oParent.A5)
+
+		' B.4 数据库插入逻辑
+		Set oEditObject = PnGetObjectEx("Edit_JobOrder")
+
+		If oEditObject Is Nothing Then
+			PnTrace ">>> [严重错误] 找不到 Edit_JobOrder 控件！"
+		Else
+			oEditObject.ApplicationToDataBase = True
+			PnSleep 500
+			oEditObject.DataBaseInsert = True
+			PnTrace ">>> [成功] 数据已提交至数据库 (DataBaseInsert)"
+
+			' 建议补复位
+			PnSleep 200
+			oEditObject.DataBaseInsert = False
+		End If
+        
+		' B.5 界面清理
+		' 不清 A1 / A1_1 / A0_1，保留同工单连续计数能力
+		oParent.A0 = ""
+		'oParent.A5 = ""
+		'oParent.First_Input_User = ""
+
+		PnTrace ">>> [清理] A0 / A5 / First_Input_User 已重置，等待下次运行。"
+	End If
+End If

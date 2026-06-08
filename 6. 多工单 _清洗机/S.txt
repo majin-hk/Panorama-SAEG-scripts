@@ -1,0 +1,32 @@
+Dim curP, lastCache, list
+
+' 1. 获取当前压力和上次缓存的压力
+curP = CDbl(PnGetValue("#PARENT.Sensor_Pressure_RealTime"))
+lastCache = CDbl(PnGetValue("#PARENT.Last_Pressure_Cache"))
+
+' --- 调试信息：可以在 PnTrace 窗口看到每一步 ---
+' PnTrace "Current Pressure: " & curP & " | Cache: " & lastCache
+
+' 2. 如果当前有压力(设定一个大于0.1的门槛防抖)，持续更新缓存
+If curP > 0.1 Then
+	PnSetValue "#PARENT.Last_Pressure_Cache", curP
+End If
+
+' 3. 【核心逻辑】检测压力掉到 0 的瞬间 (下降沿)
+' 判断条件：当前压力接近0，且上次缓存的压力大于0
+If curP < 0.1 And lastCache > 0.1 Then
+	list = PnGetValue("#PARENT.Batch_Pressure_List")
+    
+	' 将缓存中的有效压力值拼接到列表 (转换为字符串)
+	If Trim(list & "") = "" Then
+		PnSetValue "#PARENT.Batch_Pressure_List", CStr(lastCache)
+	Else
+		PnSetValue "#PARENT.Batch_Pressure_List", list & "," & CStr(lastCache)
+	End If
+    
+	' 打印一条成功记录的消息到日志，方便你确认
+	PnTrace ">>> [成功记录] 检测到压力掉0，已存入值: " & lastCache
+    
+	' 关键：记录后清空缓存，防止在0位反复触发
+	PnSetValue "#PARENT.Last_Pressure_Cache", 0
+End If

@@ -1,0 +1,122 @@
+string error = "";
+var Edit_DB = PnGetObjectEx("../Edit_DB") as CODRA_DataBase.DBTable;
+
+
+// 1) 基础检查
+if (Edit_DB == null)
+{
+	PnTrace("新增失败：找不到 Edit_DB 对象", FuncScript.TRACE_LEVEL.ERROR);
+	return;
+}
+
+if (!Edit_DB.Active)
+{
+	PnTrace("新增失败：Edit_DB 未激活", FuncScript.TRACE_LEVEL.ERROR);
+	return;
+}
+
+if (DeviceID.Value <= 0)
+{
+	PnTrace("新增失败：DeviceID 必须大于 0", FuncScript.TRACE_LEVEL.WARNING);
+	return;
+}
+
+if (string.IsNullOrWhiteSpace(DeviceNumber.Value))
+{
+	PnTrace("新增失败：DeviceNumber 不能为空", FuncScript.TRACE_LEVEL.WARNING);
+	return;
+}
+
+// 如果你希望中英文名称、类型都必须填写，就保留下面这些校验
+if (string.IsNullOrWhiteSpace(DeviceName_EN.Value))
+{
+	PnTrace("新增失败：DeviceName_EN 不能为空", FuncScript.TRACE_LEVEL.WARNING);
+	return;
+}
+
+if (string.IsNullOrWhiteSpace(DeviceName_ZH.Value))
+{
+	PnTrace("新增失败：DeviceName_ZH 不能为空", FuncScript.TRACE_LEVEL.WARNING);
+	return;
+}
+
+if (string.IsNullOrWhiteSpace(DeviceType_EN.Value))
+{
+	PnTrace("新增失败：DeviceType_EN 不能为空", FuncScript.TRACE_LEVEL.WARNING);
+	return;
+}
+
+if (string.IsNullOrWhiteSpace(DeviceType_ZH.Value))
+{
+	PnTrace("新增失败：DeviceType_ZH 不能为空", FuncScript.TRACE_LEVEL.WARNING);
+	return;
+}
+
+int currentId = DeviceID.Value;
+
+// 2) 查重：按 ID 检查
+Edit_DB.UseFilterAndOrderClause = false;
+Edit_DB.Field1 = "ID";
+Edit_DB.Test1 = CODRA_DataBase.DB_SQL_TEST.EQ;
+Edit_DB.Value1 = currentId.ToString();
+
+Edit_DB.Field2 = "";
+Edit_DB.Value2 = "";
+Edit_DB.Field3 = "";
+Edit_DB.Value3 = "";
+Edit_DB.Field4 = "";
+Edit_DB.Value4 = "";
+
+var readRes = Edit_DB.Read(out error);
+if (readRes != CODRA_DataBase.DB_OPERATION_RESULT.MAINDB_OK)
+{
+	PnTrace("新增前查重失败：" + error, FuncScript.TRACE_LEVEL.ERROR);
+	return;
+}
+
+if (Edit_DB.RecordCount > 0)
+{
+	PnTrace("新增失败：ID 已存在，ID=" + currentId.ToString(), FuncScript.TRACE_LEVEL.WARNING);
+	return;
+}
+
+// 3) 把界面值复制到数据库值
+Edit_DB.CopyApplicationToDataBase();
+
+// 4) 执行插入
+error = "";
+var insertRes = Edit_DB.Insert(out error);
+
+if (insertRes == CODRA_DataBase.DB_OPERATION_RESULT.MAINDB_OK ||
+	insertRes == CODRA_DataBase.DB_OPERATION_RESULT.BACKUPDB_OK)
+{
+	PnTrace("新增成功，ID=" + currentId.ToString(), FuncScript.TRACE_LEVEL.INFO);
+
+	// 5) 刷新 Viewer
+	if (Table != null)
+	{
+		Table.SQLRequest = "ORDER BY [ID] DESC";
+		Table.Read();
+		PnTrace("Table 已刷新（ID DESC）", FuncScript.TRACE_LEVEL.INFO);
+	}
+	else
+	{
+		PnTrace("未找到 Table 对象，无法刷新 Viewer", FuncScript.TRACE_LEVEL.WARNING);
+	}
+
+	// 6) 清空输入框
+	DeviceID.Value = 0;
+	DeviceNumber.Value = "";
+	DeviceName_EN.Value = "";
+	DeviceName_ZH.Value = "";
+	DeviceType_EN.Value = "";
+	DeviceType_ZH.Value = "";
+}
+else if (insertRes == CODRA_DataBase.DB_OPERATION_RESULT.MAINDB_ERROR)
+{
+	PnTrace("新增失败：违反数据库约束，错误=" + error, FuncScript.TRACE_LEVEL.ERROR);
+}
+else
+{
+	PnTrace("新增失败：" + error, FuncScript.TRACE_LEVEL.ERROR);
+}

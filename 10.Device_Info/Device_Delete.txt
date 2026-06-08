@@ -1,0 +1,82 @@
+string error = "";
+var Edit_DB = PnGetObjectEx("../Edit_DB") as CODRA_DataBase.DBTable;
+
+
+// 1) 基础检查
+if (Edit_DB == null)
+{
+	PnTrace("删除失败：找不到 Edit_DB 对象", FuncScript.TRACE_LEVEL.ERROR);
+	return;
+}
+
+if (!Edit_DB.Active)
+{
+	PnTrace("删除失败：Edit_DB 未激活", FuncScript.TRACE_LEVEL.ERROR);
+	return;
+}
+
+if (DeviceID.Value <= 0)
+{
+	PnTrace("删除失败：ID 不能为空，请先从 Table 选择一行记录", FuncScript.TRACE_LEVEL.WARNING);
+	return;
+}
+
+int currentId = DeviceID.Value;
+
+// 2) 按 ID 定位记录
+Edit_DB.UseFilterAndOrderClause = false;
+Edit_DB.Field1 = "ID";
+Edit_DB.Test1 = CODRA_DataBase.DB_SQL_TEST.EQ;
+Edit_DB.Value1 = currentId.ToString();
+
+Edit_DB.Field2 = "";
+Edit_DB.Value2 = "";
+Edit_DB.Field3 = "";
+Edit_DB.Value3 = "";
+Edit_DB.Field4 = "";
+Edit_DB.Value4 = "";
+
+// 3) 先确认记录存在
+var readRes = Edit_DB.Read(out error);
+if (readRes != CODRA_DataBase.DB_OPERATION_RESULT.MAINDB_OK)
+{
+	PnTrace("删除前读取失败：" + error, FuncScript.TRACE_LEVEL.ERROR);
+	return;
+}
+
+if (Edit_DB.RecordCount <= 0)
+{
+	PnTrace("删除失败：未找到 ID=" + currentId.ToString() + " 的记录", FuncScript.TRACE_LEVEL.WARNING);
+	return;
+}
+
+// 4) 执行删除
+error = "";
+var deleteRes = Edit_DB.Delete(out error);
+if (deleteRes != CODRA_DataBase.DB_OPERATION_RESULT.MAINDB_OK)
+{
+	PnTrace("删除失败：" + error, FuncScript.TRACE_LEVEL.ERROR);
+	return;
+}
+
+PnTrace("删除成功，ID=" + currentId.ToString(), FuncScript.TRACE_LEVEL.INFO);
+
+// 5) 清空输入框
+DeviceID.Value = 0;
+DeviceNumber.Value = "";
+DeviceName_EN.Value = "";
+DeviceName_ZH.Value = "";
+DeviceType_EN.Value = "";
+DeviceType_ZH.Value = "";
+
+// 6) 刷新 Viewer
+if (Table != null)
+{
+	Table.SQLRequest = "ORDER BY [ID] DESC";
+	Table.Read();
+	Table.UnSelect();
+}
+else
+{
+	PnTrace("警告：未找到 Table 对象，无法刷新 Viewer", FuncScript.TRACE_LEVEL.WARNING);
+}

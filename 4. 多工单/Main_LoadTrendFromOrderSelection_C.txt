@@ -1,0 +1,81 @@
+var fields = Table.Value.Split('|');
+
+if (fields.Length < 6)
+{
+	PnTrace("Table.Value 字段数量不足，无法提取工单/批次/时间/设备/用户信息", FuncScript.TRACE_LEVEL.ERROR);
+	return;
+}
+
+// 文本信息
+TrendJOBOrder.Value = fields[0];
+TrendBatchNo.Value = fields[1];
+TrendDeviceNo.Value = fields[4];
+TrendUserName.Value = fields[5];
+
+// 时间字符串
+var startText = fields[2];
+var endText = fields[3];
+
+// 手动解析 dd/MM/yyyy HH:mm:ss
+var startParts = startText.Split(' ');
+var endParts = endText.Split(' ');
+
+if (startParts.Length != 2 || endParts.Length != 2)
+{
+	PnTrace("日期时间格式不正确", FuncScript.TRACE_LEVEL.ERROR);
+	return;
+}
+
+var startDateParts = startParts[0].Split('/');
+var startTimeParts = startParts[1].Split(':');
+
+var endDateParts = endParts[0].Split('/');
+var endTimeParts = endParts[1].Split(':');
+
+if (startDateParts.Length != 3 || startTimeParts.Length != 3 ||
+	endDateParts.Length != 3 || endTimeParts.Length != 3)
+{
+	PnTrace("日期或时间分段数量不正确", FuncScript.TRACE_LEVEL.ERROR);
+	return;
+}
+
+var startDate = new System.DateTime(
+	int.Parse(startDateParts[2]),
+	int.Parse(startDateParts[1]),
+	int.Parse(startDateParts[0]),
+	int.Parse(startTimeParts[0]),
+	int.Parse(startTimeParts[1]),
+	int.Parse(startTimeParts[2])
+);
+
+var endDate = new System.DateTime(
+	int.Parse(endDateParts[2]),
+	int.Parse(endDateParts[1]),
+	int.Parse(endDateParts[0]),
+	int.Parse(endTimeParts[0]),
+	int.Parse(endTimeParts[1]),
+	int.Parse(endTimeParts[2])
+);
+
+TrendStart.Value = startDate;
+TrendEnd.Value = endDate;
+
+var parentObj = PnGetObjectEx("../#PARENT") as Device_SCADA.Device1;
+if (parentObj == null)
+{
+	PnTrace("Parent 不是 Device_SCADA.Device1 类型", FuncScript.TRACE_LEVEL.ERROR);
+	return;
+}
+
+var nameValue1 = Name1.Value;
+var nameValue2 = Name2.Value;
+
+if (string.IsNullOrEmpty(nameValue1) || string.IsNullOrEmpty(nameValue2))
+{
+	PnTrace("无法构造趋势视图路径：Label0 或 Label 为空", FuncScript.TRACE_LEVEL.ERROR);
+	return;
+}
+
+var viewPath = "/Main/" + nameValue1 + "/" + nameValue2 + "/Value/Trends";
+
+PnOpenView(viewPath, 25, 60, 1875, 900);

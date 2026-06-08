@@ -1,0 +1,144 @@
+Option Explicit
+
+Dim sJobOrder, sComment
+Dim oRecord, oEdit
+Dim sPath
+
+' 1. 启动调试
+PnTrace ">>> [脚本触发] 删除记录 (基于截图布局)..."
+
+' 2. 外部校验
+If Table.Value <> "" Then
+	oRecord = split(Table.Value, "|")
+
+	' 【修正1】检查列数
+	' 根据截图，Comments 在第5列，所以数组长度至少要到 5
+	If UBound(oRecord) >= 5 Then
+        
+		' 【修正2】使用模板通用路径
+		' 确保路径指向您的数据库编辑对象
+		sPath = "../#PARENT/Edit_JobOrder"
+		Set oEdit = PnGetObjectEx(sPath)
+
+		' 防错：如果模板路径找不到，尝试绝对路径
+		If oEdit Is Nothing Then
+			sPath = "/Main/Wax/MPI_1/Device/Edit_JobOrder"
+			Set oEdit = PnGetObjectEx(sPath)
+		End If
+
+		If oEdit Is Nothing Then
+			PnTrace ">>> [致命错误] 找不到 Edit_JobOrder 对象！"
+		Else
+			' =======================================================
+			' 【步骤 A】 获取数据 (根据截图修正索引)
+			' =======================================================
+            
+			' Column 0: Job Order
+			sJobOrder = Trim(oRecord(0))
+            
+			' Column 5: Comments (截图里备注在第5列！)
+			sComment = oRecord(5) 
+
+			PnTrace ">>> [选中行] 工单: [" & sJobOrder & "] | 备注: [" & sComment & "]"
+
+			' =======================================================
+			' 【步骤 B】 构造筛选条件 (4个条件)
+			' =======================================================
+
+			' --- 条件 1: Job Order (Column 0) ---
+			oEdit.Field1 = "Job Order"       ' 截图显示中间有空格
+			oEdit.Test1 = DB_SQL_TEST.EQ
+			oEdit.Value1 = sJobOrder
+			oEdit.Operator1 = DB_LOGICAL_OPERATOR.And
+
+			' --- 条件 2: Start Time (Column 1) ---
+			' 截图显示 Start Time 在第2列 (索引1)
+			If oRecord(1) <> "" Then
+				oEdit.Field2 = "Start Time"  ' 截图显示中间有空格
+				oEdit.Test2 = DB_SQL_TEST.EQ
+				oEdit.Value2 = ParseUniversalDate(oRecord(1))
+			Else
+				oEdit.Field2 = "Start Time"
+				oEdit.Test2 = DB_SQL_TEST.IS_NULL
+			End If
+			oEdit.Operator2 = DB_LOGICAL_OPERATOR.And
+
+			' --- 条件 3: End Time (Column 2) ---
+			' 截图显示 End Time 在第3列 (索引2)
+			If oRecord(2) <> "" Then
+				oEdit.Field3 = "End Time"    ' 截图显示中间有空格
+				oEdit.Test3 = DB_SQL_TEST.EQ
+				oEdit.Value3 = ParseUniversalDate(oRecord(2))
+			Else
+				oEdit.Field3 = "End Time"
+				oEdit.Test3 = DB_SQL_TEST.IS_NULL
+			End If
+			oEdit.Operator3 = DB_LOGICAL_OPERATOR.And
+
+			' --- 条件 4: Comments (Column 5) ---
+			oEdit.Field4 = "Comments"        ' 截图显示有 's'
+            
+			If sComment = "" Then
+				' 如果表格里是空的，尝试匹配空字符串
+				oEdit.Test4 = DB_SQL_TEST.EQ
+				oEdit.Value4 = ""
+				PnTrace ">>> [条件] Comments 为空字符串"
+			Else
+				oEdit.Test4 = DB_SQL_TEST.EQ
+				oEdit.Value4 = sComment
+				PnTrace ">>> [条件] Comments: " & sComment
+			End If
+
+			' =======================================================
+			' 【步骤 C】 执行删除
+			' =======================================================
+			PnTrace ">>> [执行] 正在删除..."
+			oEdit.DataBaseDelete = True
+
+			PnSleep 200
+			Table.Read
+			PnTrace ">>> [成功] 刷新完成。"
+		End If
+        
+	Else
+		PnTrace ">>> [错误] 表格列数不足，无法解析数据。"
+	End If
+Else
+	PnTrace ">>> [警告] 未选中任何行。"
+End If
+
+
+' =========================================================
+' 【核心函数】通用日期解析器
+' =========================================================
+Function ParseUniversalDate(strInput)
+	Dim parts, sDatePart, timePart, dateSubParts
+	Dim y, m, d
+    
+	parts = Split(Trim(strInput), " ")
+	If UBound(parts) >= 0 Then sDatePart = parts(0) Else ParseUniversalDate = "NULL" : Exit Function
+	If UBound(parts) >= 1 Then timePart = parts(1) Else timePart = "00:00:00"
+    
+	If InStr(sDatePart, "/") > 0 Then
+		dateSubParts = Split(sDatePart, "/")
+	ElseIf InStr(sDatePart, "-") > 0 Then
+		dateSubParts = Split(sDatePart, "-")
+	ElseIf InStr(sDatePart, ".") > 0 Then
+		dateSubParts = Split(sDatePart, ".")
+	Else
+		ParseUniversalDate = strInput : Exit Function
+	End If
+    
+	If UBound(dateSubParts) = 2 Then
+		If Len(dateSubParts(0)) = 4 Then
+			y = dateSubParts(0): m = Right("0" & dateSubParts(1), 2): d = Right("0" & dateSubParts(2), 2)
+		ElseIf Len(dateSubParts(2)) = 4 Then
+			d = Right("0" & dateSubParts(0), 2): m = Right("0" & dateSubParts(1), 2): y = dateSubParts(2)
+		Else
+			ParseUniversalDate = strInput : Exit Function
+		End If
+		ParseUniversalDate = y & "-" & m & "-" & d & " " & timePart & ".0000000"
+	Else
+		ParseUniversalDate = strInput
+	End If
+End Function

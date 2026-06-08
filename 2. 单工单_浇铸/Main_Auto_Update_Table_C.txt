@@ -1,0 +1,33 @@
+string tracePrefix = "Auto_Update_Table - ";
+string currentDevice = "";
+
+PnTrace(tracePrefix + "脚本开始执行", FuncScript.TRACE_LEVEL.INFO);
+
+PnSleep(300);
+
+var parentObj = PnGetObjectEx("../#PARENT") as Device_SCADA.Device_Casting;
+if (parentObj == null)
+{
+	PnTrace(tracePrefix + "父对象转换失败", FuncScript.TRACE_LEVEL.ERROR);
+	return;
+}
+
+currentDevice = parentObj.Device_Number.ToString();
+PnTrace(tracePrefix + "Device_Number=[" + currentDevice + "]", FuncScript.TRACE_LEVEL.INFO);
+
+if (string.IsNullOrEmpty(currentDevice))
+{
+	PnTrace(tracePrefix + "设备为空，取消自动刷新", FuncScript.TRACE_LEVEL.WARNING);
+	return;
+}
+
+Filter_Device.Value = currentDevice;
+Filter_JobOrder.Value = "";
+Filter_Comment.Value = "";
+PnTrace(tracePrefix + "筛选控件已同步，设备=[" + currentDevice + "]", FuncScript.TRACE_LEVEL.INFO);
+
+PnSleep(800);
+PnTrace(tracePrefix + "延迟结束，准备触发 TableRead", FuncScript.TRACE_LEVEL.INFO);
+
+TableRead.Active = true;
+PnTrace(tracePrefix + "已触发 TableRead", FuncScript.TRACE_LEVEL.INFO);

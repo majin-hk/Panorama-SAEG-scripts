@@ -1,0 +1,470 @@
+using System;
+using System.IO;
+using System.Net.Sockets;
+using System.Threading;
+using System.Globalization;
+using System.Runtime.InteropServices;
+
+namespace MyCompany.Panorama
+{
+    [ComVisible(true)]
+    public class TcpTextReceiverV2
+    {
+        private readonly object _sync = new object();
+
+        // ===== 配置属性 =====
+        private string _host = "127.0.0.1";
+        private int _port = 8000;
+        private bool _active = true;
+        private int _reconnectDelayMs = 3000;
+        private int _readTimeoutMs = 5000;
+
+        // ===== 与 Panorama 描述符兼容的配置属性 =====
+        private string _fieldSeparator = ",";
+        private string _linePrefixFilter = "";
+        private int _valueFieldIndex = 1;
+
+        // ===== 输出属性 =====
+        private bool _connected = false;
+        private string _lastFrame = "";
+        private double _lastValue = 0.0;
+        private string _error = "DLL_V2_LOADED";
+
+        // ===== 生命周期 =====
+        private bool _running = false;
+
+        // ===== 内部资源 =====
+        private Thread _workerThread = null;
+        private bool _stopRequested = false;
+        private TcpClient _client = null;
+        private StreamReader _reader = null;
+
+        // --------------------------------------------------------------------
+        // 配置属性
+        // --------------------------------------------------------------------
+
+        public string Host
+        {
+            get { lock (_sync) { return _host; } }
+            set
+            {
+                lock (_sync)
+                {
+                    string v = value ?? "";
+                    v = v.Trim();
+                    v = v.Trim('"');
+                    v = v.Trim('“', '”');
+                    _host = v;
+                }
+            }
+        }
+
+        public int Port
+        {
+            get { lock (_sync) { return _port; } }
+            set { lock (_sync) { _port = value; } }
+        }
+
+        public bool Active
+        {
+            get { lock (_sync) { return _active; } }
+            set
+            {
+                bool mustDisconnect = false;
+
+                lock (_sync)
+                {
+                    if (_active != value)
+                    {
+                        _active = value;
+                        if (!_active)
+                            mustDisconnect = true;
+                    }
+                }
+
+                if (mustDisconnect)
+                {
+                    lock (_sync)
+                    {
+                        InternalDisconnectUnsafe("Inactive");
+                    }
+                }
+            }
+        }
+
+        public int ReconnectDelayMs
+        {
+            get { lock (_sync) { return _reconnectDelayMs; } }
+            set { lock (_sync) { _reconnectDelayMs = value < 100 ? 100 : value; } }
+        }
+
+        public int ReadTimeoutMs
+        {
+            get { lock (_sync) { return _readTimeoutMs; } }
+            set { lock (_sync) { _readTimeoutMs = value < 100 ? 100 : value; } }
+        }
+
+        public string FieldSeparator
+        {
+            get { lock (_sync) { return _fieldSeparator; } }
+            set { lock (_sync) { _fieldSeparator = string.IsNullOrEmpty(value) ? "," : value; } }
+        }
+
+        public string LinePrefixFilter
+        {
+            get { lock (_sync) { return _linePrefixFilter; } }
+            set { lock (_sync) { _linePrefixFilter = value ?? ""; } }
+        }
+
+        public int ValueFieldIndex
+        {
+            get { lock (_sync) { return _valueFieldIndex; } }
+            set { lock (_sync) { _valueFieldIndex = value < 0 ? 0 : value; } }
+        }
+
+        // --------------------------------------------------------------------
+        // 输出属性
+        // --------------------------------------------------------------------
+
+        public bool Connected
+        {
+            get { lock (_sync) { return _connected; } }
+        }
+
+        public string LastFrame
+        {
+            get { lock (_sync) { return _lastFrame; } }
+        }
+
+        public double LastValue
+        {
+            get { lock (_sync) { return _lastValue; } }
+        }
+
+        public string Error
+        {
+            get { lock (_sync) { return _error; } }
+        }
+
+
+        // --------------------------------------------------------------------
+        // 生命周期
+        // --------------------------------------------------------------------
+
+        public bool Running
+        {
+            get { lock (_sync) { return _running; } }
+            set
+            {
+                bool start = false;
+                bool stop = false;
+
+                lock (_sync)
+                {
+                    if (_running == value)
+                        return;
+
+                    _running = value;
+                    if (_running)
+                        start = true;
+                    else
+                        stop = true;
+                }
+
+                if (start)
+                    StartWorker();
+
+                if (stop)
+                    StopWorker();
+            }
+        }
+
+        // --------------------------------------------------------------------
+        // 线程管理
+        // --------------------------------------------------------------------
+
+        private void StartWorker()
+        {
+            lock (_sync)
+            {
+                _stopRequested = false;
+
+                if (_workerThread != null && _workerThread.IsAlive)
+                    return;
+
+                _error = "STARTED_V3";
+                _workerThread = new Thread(WorkerLoop);
+                _workerThread.IsBackground = true;
+                _workerThread.Name = "TcpTextReceiverV2Worker";
+                _workerThread.Start();
+            }
+        }
+
+        private void StopWorker()
+        {
+            Thread threadToJoin = null;
+
+            lock (_sync)
+            {
+                _stopRequested = true;
+                InternalCloseSocketUnsafe();
+                threadToJoin = _workerThread;
+                _error = "STOPPED";
+            }
+
+            if (threadToJoin != null && threadToJoin.IsAlive)
+            {
+                try
+                {
+                    threadToJoin.Join(3000);
+                }
+                catch
+                {
+                }
+            }
+
+            lock (_sync)
+            {
+                _workerThread = null;
+                _connected = false;
+            }
+        }
+
+        // --------------------------------------------------------------------
+        // 主循环
+        // --------------------------------------------------------------------
+
+        private void WorkerLoop()
+        {
+            while (true)
+            {
+                string host;
+                int port;
+                int reconnectDelay;
+                int readTimeout;
+                bool active;
+                bool stopRequested;
+
+                lock (_sync)
+                {
+                    host = _host;
+                    port = _port;
+                    reconnectDelay = _reconnectDelayMs;
+                    readTimeout = _readTimeoutMs;
+                    active = _active;
+                    stopRequested = _stopRequested;
+                }
+
+                if (stopRequested)
+                    break;
+
+                if (!active)
+                {
+                    lock (_sync)
+                    {
+                        _error = "Inactive";
+                    }
+
+                    Thread.Sleep(300);
+                    continue;
+                }
+
+                try
+                {
+                    lock (_sync)
+                    {
+                        _error = "Connecting to " + host + ":" + port;
+                    }
+
+                    ConnectAndRead(host, port, readTimeout);
+                }
+                catch (Exception ex)
+                {
+                    lock (_sync)
+                    {
+                        _connected = false;
+                        _error = "Connect/read error: " + ex.GetType().Name + " - " + ex.Message;
+                    }
+                }
+
+                lock (_sync)
+                {
+                    if (_stopRequested)
+                        break;
+                }
+
+                Thread.Sleep(reconnectDelay);
+            }
+
+            lock (_sync)
+            {
+                InternalCloseSocketUnsafe();
+                _connected = false;
+            }
+        }
+
+        private void ConnectAndRead(string host, int port, int readTimeout)
+        {
+            if (string.IsNullOrWhiteSpace(host))
+                throw new Exception("Host is empty.");
+
+            if (port <= 0 || port > 65535)
+                throw new Exception("Port is invalid.");
+
+            TcpClient client = new TcpClient();
+            client.Connect(host, port);
+
+            NetworkStream stream = client.GetStream();
+            stream.ReadTimeout = readTimeout;
+
+            StreamReader reader = new StreamReader(stream);
+
+            lock (_sync)
+            {
+                _client = client;
+                _reader = reader;
+                _connected = true;
+                _error = "Connected";
+            }
+
+            while (true)
+            {
+                bool stopRequested;
+                bool active;
+
+                lock (_sync)
+                {
+                    stopRequested = _stopRequested;
+                    active = _active;
+                }
+
+                if (stopRequested || !active)
+                    break;
+
+                string line = reader.ReadLine();
+
+                if (line == null)
+                    throw new IOException("Remote side closed the connection.");
+
+                line = line.Trim();
+
+                if (line.Length == 0)
+                    continue;
+
+                ProcessLine(line);
+            }
+
+            lock (_sync)
+            {
+                InternalCloseSocketUnsafe();
+                _connected = false;
+            }
+        }
+
+        // --------------------------------------------------------------------
+        // 报文处理
+        // 示例：
+        // 0,+5.6500E+00
+        // 2,+9.9800E+02
+        // 只取第二列
+        // --------------------------------------------------------------------
+
+        private void ProcessLine(string line)
+        {
+            string separator;
+            string prefixFilter;
+            int valueFieldIndex;
+
+            lock (_sync)
+            {
+                _lastFrame = line;
+                separator = _fieldSeparator;
+                prefixFilter = _linePrefixFilter;
+                valueFieldIndex = _valueFieldIndex;
+                _error = "Frame received";
+            }
+
+            string[] parts = line.Split(new string[] { separator }, StringSplitOptions.None);
+
+            if (parts.Length <= valueFieldIndex)
+            {
+                lock (_sync)
+                {
+                    _error = "Invalid frame: " + line;
+                }
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(prefixFilter))
+            {
+                if (parts[0].Trim() != prefixFilter)
+                {
+                    lock (_sync)
+                    {
+                        _error = "Unexpected prefix: " + line;
+                    }
+                    return;
+                }
+            }
+
+            double parsedValue;
+            if (double.TryParse(
+                parts[valueFieldIndex].Trim(),
+                NumberStyles.Float,
+                CultureInfo.InvariantCulture,
+                out parsedValue))
+            {
+                lock (_sync)
+                {
+                    _lastValue = parsedValue;
+                    _error = "";
+                }
+            }
+            else
+            {
+                lock (_sync)
+                {
+                    _error = "Parse error: " + line;
+                }
+            }
+        }
+
+        // --------------------------------------------------------------------
+        // 资源释放
+        // --------------------------------------------------------------------
+
+        private void InternalDisconnectUnsafe(string reason)
+        {
+            InternalCloseSocketUnsafe();
+            _connected = false;
+            _error = reason;
+        }
+
+        private void InternalCloseSocketUnsafe()
+        {
+            try
+            {
+                if (_reader != null)
+                {
+                    _reader.Dispose();
+                    _reader = null;
+                }
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                if (_client != null)
+                {
+                    _client.Close();
+                    _client = null;
+                }
+            }
+            catch
+            {
+            }
+        }
+    }
+}

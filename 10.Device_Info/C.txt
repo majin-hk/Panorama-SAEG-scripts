@@ -1,0 +1,44 @@
+if (Table == null)
+{
+	PnTrace("回填失败：找不到 Table 对象", FuncScript.TRACE_LEVEL.ERROR);
+	return;
+}
+
+if (string.IsNullOrWhiteSpace(Table.Value))
+{
+	PnTrace("回填失败：当前没有选中任何行", FuncScript.TRACE_LEVEL.WARNING);
+	return;
+}
+
+// 按 Viewer 当前列顺序拆分
+var fields = Table.Value.Split('|');
+
+if (fields == null || fields.Length < 6)
+{
+	PnTrace("回填失败：Table.Value 字段数量不足，内容=" + Table.Value, FuncScript.TRACE_LEVEL.ERROR);
+	return;
+}
+
+string idText = fields[0].Trim();
+string deviceNumberText = fields[1].Trim();
+string deviceNameEnText = fields[2].Trim();
+string deviceNameZhText = fields[3].Trim();
+string deviceTypeEnText = fields[4].Trim();
+string deviceTypeZhText = fields[5].Trim();
+
+int idValue = 0;
+if (!int.TryParse(idText, out idValue))
+{
+	PnTrace("回填失败：ID 不是有效整数，值=" + idText, FuncScript.TRACE_LEVEL.ERROR);
+	return;
+}
+
+// 回填到上方输入框
+DeviceID.Value = idValue;
+DeviceNumber.Value = deviceNumberText;
+DeviceName_EN.Value = deviceNameEnText;
+DeviceName_ZH.Value = deviceNameZhText;
+DeviceType_EN.Value = deviceTypeEnText;
+DeviceType_ZH.Value = deviceTypeZhText;
+
+PnTrace("回填成功，ID=" + idValue.ToString(), FuncScript.TRACE_LEVEL.INFO);

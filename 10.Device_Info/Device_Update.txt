@@ -1,0 +1,166 @@
+string error = "";
+var Edit_DB = PnGetObjectEx("../Edit_DB") as CODRA_DataBase.DBTable;
+
+// 1) 基础检查
+if (Edit_DB == null)
+{
+	PnTrace("更新失败：找不到 Edit_DB 对象", FuncScript.TRACE_LEVEL.ERROR);
+	return;
+}
+
+if (!Edit_DB.Active)
+{
+	PnTrace("更新失败：Edit_DB 未激活", FuncScript.TRACE_LEVEL.ERROR);
+	return;
+}
+
+if (DeviceID.Value <= 0)
+{
+	PnTrace("更新失败：ID 不能为空，请先从 Table 选择一行记录", FuncScript.TRACE_LEVEL.WARNING);
+	return;
+}
+
+int currentId = DeviceID.Value;
+
+// 2) 先按 ID 读取原记录，确认存在
+Edit_DB.UseFilterAndOrderClause = false;
+Edit_DB.Field1 = "ID";
+Edit_DB.Test1 = CODRA_DataBase.DB_SQL_TEST.EQ;
+Edit_DB.Value1 = currentId.ToString();
+
+Edit_DB.Field2 = "";
+Edit_DB.Value2 = "";
+Edit_DB.Field3 = "";
+Edit_DB.Value3 = "";
+Edit_DB.Field4 = "";
+Edit_DB.Value4 = "";
+
+var readRes = Edit_DB.Read(out error);
+if (readRes != CODRA_DataBase.DB_OPERATION_RESULT.MAINDB_OK)
+{
+	PnTrace("更新前读取失败：" + error, FuncScript.TRACE_LEVEL.ERROR);
+	return;
+}
+
+if (Edit_DB.RecordCount <= 0)
+{
+	PnTrace("更新失败：未找到 ID=" + currentId.ToString() + " 的记录", FuncScript.TRACE_LEVEL.WARNING);
+	return;
+}
+
+// 3) 获取字段子对象
+var A1 = PnGetObjectEx("../Edit_DB/A1") as CODRA_DataBase.DBTableColumn;
+var A2 = PnGetObjectEx("../Edit_DB/A2") as CODRA_DataBase.DBTableColumn;
+var A3 = PnGetObjectEx("../Edit_DB/A3") as CODRA_DataBase.DBTableColumn;
+var A4 = PnGetObjectEx("../Edit_DB/A4") as CODRA_DataBase.DBTableColumn;
+var A5 = PnGetObjectEx("../Edit_DB/A5") as CODRA_DataBase.DBTableColumn;
+var A6 = PnGetObjectEx("../Edit_DB/A6") as CODRA_DataBase.DBTableColumn;
+
+if (A1 == null || A2 == null || A3 == null || A4 == null || A5 == null || A6 == null)
+{
+	PnTrace("更新失败：找不到 Edit_DB 的字段子对象 A1~A6", FuncScript.TRACE_LEVEL.ERROR);
+	return;
+}
+
+// 4) 写回 6 个字段
+// A1=ID 主键，一般不改
+A2.DataBaseValue = DeviceNumber.Value;
+A3.DataBaseValue = DeviceName_EN.Value;
+A4.DataBaseValue = DeviceName_ZH.Value;
+A5.DataBaseValue = DeviceType_EN.Value;
+A6.DataBaseValue = DeviceType_ZH.Value;
+
+// 5) 执行更新
+error = "";
+var updateRes = Edit_DB.Update(out error);
+if (updateRes != CODRA_DataBase.DB_OPERATION_RESULT.MAINDB_OK)
+{
+	PnTrace("更新失败：" + error, FuncScript.TRACE_LEVEL.ERROR);
+	return;
+}
+
+PnTrace("更新成功，ID=" + currentId.ToString(), FuncScript.TRACE_LEVEL.INFO);
+
+// 6) 刷新 Viewer
+if (Table != null)
+{
+	Table.SQLRequest = "ORDER BY [ID] DESC";
+	Table.Read();
+}
+else
+{
+	PnTrace("警告：未找到 Table 对象，无法刷新 Viewer", FuncScript.TRACE_LEVEL.WARNING);
+}
+
+var scriptMap = new System.Collections.Generic.Dictionary<int, string>();
+scriptMap[1] = "/Main/Wax/MPI_1/Device/ReadDeviceInfo";
+scriptMap[2] = "/Main/Wax/MPI_2/Device/ReadDeviceInfo";
+scriptMap[3] = "/Main/Wax/MPI_3/Device/ReadDeviceInfo";
+scriptMap[4] = "/Main/Wax/MPI_4/Device/ReadDeviceInfo";
+scriptMap[5] = "/Main/Wax/CTM_1/Device/ReadDeviceInfo";
+scriptMap[6] = "/Main/Wax/CTM_2/Device/ReadDeviceInfo";
+scriptMap[7] = "/Main/Wax/CTM_3/Device/ReadDeviceInfo";
+scriptMap[8] = "/Main/Washing/Washing/Device/ReadDeviceInfo";
+scriptMap[9] = "/Main/VATECH/VATECH1/Device/ReadDeviceInfo";
+scriptMap[10] = "/Main/VATECH/VATECH2/Device/ReadDeviceInfo";
+scriptMap[11] = "/Main/VATECH/VATECH3/Device/ReadDeviceInfo";
+scriptMap[12] = "/Main/Vacuum_chamber/Vacuum_Chamber1/Device/ReadDeviceInfo";
+scriptMap[13] = "/Main/Vacuum_chamber/Vacuum_Chamber2/Device/ReadDeviceInfo";
+scriptMap[14] = "/Main/Fridge/Fridge1/Device/ReadDeviceInfo";
+scriptMap[15] = "/Main/Fridge/Fridge2/Device/ReadDeviceInfo";
+scriptMap[16] = "/Main/Fridge/Fridge3/Device/ReadDeviceInfo";
+scriptMap[17] = "/Main/Fridge/Fridge4/Device/ReadDeviceInfo";
+scriptMap[18] = "/Main/Fridge/Fridge5/Device/ReadDeviceInfo";
+scriptMap[19] = "/Main/Fridge/Fridge6/Device/ReadDeviceInfo";
+scriptMap[20] = "/Main/Fridge/Fridge7/Device/ReadDeviceInfo";
+scriptMap[21] = "/Main/Fridge/Fridge8/Device/ReadDeviceInfo";
+scriptMap[22] = "/Main/AutoClave/LBBC1/Device/ReadDeviceInfo";
+scriptMap[23] = "/Main/AutoClave/LBBC2/Device/ReadDeviceInfo";
+scriptMap[24] = "/Main/Baking/Baking1/Device/ReadDeviceInfo";
+scriptMap[25] = "/Main/Baking/Baking2/Device/ReadDeviceInfo";
+scriptMap[26] = "/Main/Baking/Baking3/Device/ReadDeviceInfo";
+scriptMap[27] = "/Main/Baking/Baking4/Device/ReadDeviceInfo";
+scriptMap[28] = "/Main/Baking/Baking5/Device/ReadDeviceInfo";
+scriptMap[29] = "/Main/Dry_cleaner/Dry_Cleaning/Device/ReadDeviceInfo";
+scriptMap[30] = "/Main/Casting/Casting1/Device/ReadDeviceInfo";
+scriptMap[31] = "/Main/Casting/Casting2/Device/ReadDeviceInfo";
+scriptMap[32] = "/Main/Casting/Casting3/Device/ReadDeviceInfo";
+scriptMap[33] = "/Main/Knock/Knock/Device/ReadDeviceInfo";
+scriptMap[34] = "/Main/Mold_cutting_machine/Mold_Cutting/Device/ReadDeviceInfo";
+scriptMap[35] = "/Main/Heat_treatment/SAMT/Device/ReadDeviceInfo";
+scriptMap[36] = "/Main/Heat_treatment/SECO/Device/ReadDeviceInfo";
+scriptMap[37] = "/Main/Heat_treatment/HHZY/Device/ReadDeviceInfo";
+scriptMap[38] = "/Main/Sand_blasting/Sand_blasting1/Device/ReadDeviceInfo";
+scriptMap[39] = "/Main/Sand_blasting/Sand_blasting2/Device/ReadDeviceInfo";
+scriptMap[40] = "/Main/Sand_blasting/Sand_blasting3/Device/ReadDeviceInfo";
+scriptMap[41] = "/Main/Sand_blasting/Sand_blasting4/Device/ReadDeviceInfo";
+scriptMap[42] = "/Main/Sand_blasting/Sand_blasting5/Device/ReadDeviceInfo";
+scriptMap[43] = "/Main/Macro_line/Macro_line/Device/ReadDeviceInfo";
+scriptMap[44] = "/Main/FPI/FPI1/Device/ReadDeviceInfo";
+scriptMap[45] = "/Main/FPI/FPI2/Device/ReadDeviceInfo";
+scriptMap[46] = "/Main/Xray/Xray1/Device/ReadDeviceInfo";
+scriptMap[47] = "/Main/Xray/Xray2/Device/ReadDeviceInfo";
+scriptMap[48] = "/Main/CMMS/CMMS1/Device/ReadDeviceInfo";
+scriptMap[49] = "/Main/CMMS/CMMS2/Device/ReadDeviceInfo";
+scriptMap[50] = "/Main/CMMS/CMMS3/Device/ReadDeviceInfo";
+scriptMap[51] = "/Main/CMMS/CMMS4/Device/ReadDeviceInfo";
+scriptMap[52] = "/Main/CMMS/CMMS5/Device/ReadDeviceInfo";
+scriptMap[53] = "/Main/CMMS/CMMS6/Device/ReadDeviceInfo";
+scriptMap[54] = "/Main/CMMS/CMMS7/Device/ReadDeviceInfo";
+scriptMap[55] = "/Main/CMMS/CMMS8/Device/ReadDeviceInfo";
+scriptMap[56] = "/Main/Equators/Equators1/Device/ReadDeviceInfo";
+scriptMap[57] = "/Main/Equators/Equators2/Device/ReadDeviceInfo";
+scriptMap[58] = "/Main/Laser_marking/Laser_marking/Device/ReadDeviceInfo";
+
+if (scriptMap.ContainsKey(currentId))
+{
+	PnCallScript(scriptMap[currentId], 0);
+	PnTrace("已刷新设备对象，ID=" + currentId.ToString(), FuncScript.TRACE_LEVEL.INFO);
+}
+else
+{
+	PnTrace("更新成功，但未配置 ID=" + currentId.ToString() + " 对应的 ReadDeviceInfo 刷新路径", FuncScript.TRACE_LEVEL.WARNING);
+}
+
+// 页面显示值再刷新一次
+PnCallScript("/Main/Main/RefreshDeviceDisplay", 0);

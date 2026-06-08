@@ -1,0 +1,31 @@
+Option Explicit
+
+Dim oDev
+Dim sUser
+Dim sJob
+
+PnTrace "单工单HMI脚本启动"
+
+Set oDev = PnGetObjectEx("../#PARENT")
+
+If (oDev Is Nothing) Then
+	PnTrace "未找到 SingleJoborder_input 对象"
+Else
+	PnTrace "SingleJoborder_input 对象已找到"
+	
+	sUser = PnUserManager.UserName
+	sJob = oDev.TargetJobOrder
+	
+	PnTrace "UserName=" & sUser
+	PnTrace "TargetJobOrder=" & sJob
+	PnTrace "写入前 FirstInputUser=" & oDev.FirstInputUser
+
+	If sJob <> "" Then
+		oDev.FirstInputUser = sUser
+		PnTrace "单工单 FirstInputUser 已写入"
+	Else
+		PnTrace "单工单内容为空，不写用户"
+	End If
+
+	PnTrace "写入后 FirstInputUser=" & oDev.FirstInputUser
+End If

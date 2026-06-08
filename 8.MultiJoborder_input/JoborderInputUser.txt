@@ -1,0 +1,35 @@
+Option Explicit
+
+Dim oDev
+Dim sUser
+Dim sJobList
+
+PnTrace "多工单HMI脚本启动"
+
+Set oDev = PnGetObjectEx("../#PARENT")
+
+If (oDev Is Nothing) Then
+	PnTrace "未找到 MultiJoborder_input 对象"
+Else
+	PnTrace "MultiJoborder_input 对象已找到"
+	
+	sUser = PnUserManager.UserName
+	sJobList = oDev.TargetMultiLine
+	
+	PnTrace "UserName=" & sUser
+	PnTrace "TargetMultiLine=" & sJobList
+	PnTrace "写入前 FirstInputUser=" & oDev.FirstInputUser
+
+	If sJobList <> "" Then
+		If oDev.FirstInputUser = "" Then
+			oDev.FirstInputUser = sUser
+			PnTrace "多工单 FirstInputUser 首次写入"
+		Else
+			PnTrace "多工单 FirstInputUser 已存在，不覆盖"
+		End If
+	Else
+		PnTrace "多工单内容为空，不写用户"
+	End If
+
+	PnTrace "写入后 FirstInputUser=" & oDev.FirstInputUser
+End If

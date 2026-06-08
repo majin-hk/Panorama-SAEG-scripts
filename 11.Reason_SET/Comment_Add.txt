@@ -1,0 +1,190 @@
+string error;
+string txt = Comment.Value;
+
+if (txt == null)
+{
+	PnTrace("新增失败：输入为空。", FuncScript.TRACE_LEVEL.WARNING);
+	return;
+}
+
+txt = txt.Trim();
+
+if (txt == "")
+{
+	PnTrace("新增失败：输入为空字符串。", FuncScript.TRACE_LEVEL.WARNING);
+	return;
+}
+
+var Edit_DB = PnGetObjectEx("../Edit_DB") as CODRA_DataBase.DBTable;
+var ColID = PnGetObjectEx("../Edit_DB/A1") as CODRA_DataBase.DBTableColumn;
+var ColComment = PnGetObjectEx("../Edit_DB/A2") as CODRA_DataBase.DBTableColumn;
+
+if (Edit_DB == null || ColID == null || ColComment == null)
+{
+	PnTrace("新增失败：无法获取数据库对象。", FuncScript.TRACE_LEVEL.ERROR);
+	return;
+}
+
+// 1) 查重
+Edit_DB.UseFilterAndOrderClause = false;
+Edit_DB.FilterAndOrderClause = "";
+Edit_DB.Field1 = "CommentText";
+Edit_DB.Test1 = CODRA_DataBase.DB_SQL_TEST.EQ;
+Edit_DB.Value1 = txt;
+
+var readRes = Edit_DB.Read(out error);
+
+if (error != "")
+{
+	PnTrace("查重失败：" + error, FuncScript.TRACE_LEVEL.ERROR);
+	return;
+}
+
+if (Edit_DB.RecordCount > 0)
+{
+	PnTrace("新增失败：该内容已存在。", FuncScript.TRACE_LEVEL.WARNING);
+	return;
+}
+
+// 2) 读取当前最大 ID
+Edit_DB.Field1 = "";
+Edit_DB.Value1 = "";
+Edit_DB.UseFilterAndOrderClause = true;
+Edit_DB.FilterAndOrderClause = "ORDER BY ID DESC";
+Edit_DB.MaxRecords = 1;
+
+readRes = Edit_DB.Read(out error);
+
+if (error != "")
+{
+	PnTrace("读取最大ID失败：" + error, FuncScript.TRACE_LEVEL.ERROR);
+	return;
+}
+
+int newId = 1;
+
+if (Edit_DB.RecordCount > 0 && ColID.DataBaseValue != null)
+{
+	int maxId;
+	if (int.TryParse(ColID.DataBaseValue.ToString(), out maxId))
+		newId = maxId + 1;
+}
+
+PnTrace("计算得到 newId=" + newId, FuncScript.TRACE_LEVEL.INFO);
+
+// 3) 清理读取条件
+Edit_DB.UseFilterAndOrderClause = false;
+Edit_DB.FilterAndOrderClause = "";
+Edit_DB.Field1 = "";
+Edit_DB.Value1 = "";
+
+// 4) 写入新记录
+ColID.DataBaseValue = newId;
+ColComment.DataBaseValue = txt;
+
+PnTrace("准备插入：ID=" + newId + "，Comment=" + txt, FuncScript.TRACE_LEVEL.INFO);
+
+var insertRes = Edit_DB.Insert(out error);
+
+if (error != "")
+{
+	PnTrace("新增失败：" + error, FuncScript.TRACE_LEVEL.ERROR);
+	return;
+}
+
+PnTrace("新增成功：ID=" + newId + "，Comment=" + txt, FuncScript.TRACE_LEVEL.INFO);
+
+// 5) 刷新表格
+Tabel.Read();
+
+// 6) 清空输入框
+Comment.Value = "";
+
+var Reason_SET = (PnGetObjectEx("../#PARENT") as Device_SCADA.Reason_SET);
+Comment_1.InputList = Reason_SET.CommentStore;
+Comment_1.Value = "";
+
+string rebuildError;
+string sep = Comment_1.Separator;
+
+if (sep == null || sep == "")
+{
+	sep = ";";
+	Comment_1.Separator = sep;
+}
+
+var rebuildDB = PnGetObjectEx("../Edit_DB") as CODRA_DataBase.DBTable;
+var colComment = PnGetObjectEx("../Edit_DB/A2") as CODRA_DataBase.DBTableColumn;
+
+if (rebuildDB == null || colComment == null)
+{
+	PnTrace("重建下拉框失败：无法获取数据库对象。", FuncScript.TRACE_LEVEL.ERROR);
+	return;
+}
+
+// 清理旧条件
+rebuildDB.UseFilterAndOrderClause = true;
+rebuildDB.FilterAndOrderClause = "ORDER BY ID ASC";
+rebuildDB.MaxRecords = 0;
+rebuildDB.Field1 = "";
+rebuildDB.Value1 = "";
+rebuildDB.Field2 = "";
+rebuildDB.Value2 = "";
+rebuildDB.Field3 = "";
+rebuildDB.Value3 = "";
+rebuildDB.Field4 = "";
+rebuildDB.Value4 = "";
+
+// 先读取整表
+rebuildDB.Read(out rebuildError);
+
+if (rebuildError != "")
+{
+	PnTrace("重建下拉框失败：" + rebuildError, FuncScript.TRACE_LEVEL.ERROR);
+	return;
+}
+
+string inputList = "";
+
+if (rebuildDB.RecordCount > 0)
+{
+	// 先处理当前记录
+	if (colComment.DataBaseValue != null)
+	{
+		string commentText = colComment.DataBaseValue.ToString().Trim();
+
+		if (commentText != "")
+			inputList = commentText;
+	}
+
+	// 再逐条读后续记录
+	while (rebuildDB.GoToNextRecord())
+	{
+		if (colComment.DataBaseValue == null)
+			continue;
+
+		string commentText = colComment.DataBaseValue.ToString().Trim();
+
+		if (commentText == "")
+			continue;
+
+		if (inputList == "")
+			inputList = commentText;
+		else
+			inputList = inputList + sep + commentText;
+	}
+}
+
+// 清理状态
+rebuildDB.UseFilterAndOrderClause = false;
+rebuildDB.FilterAndOrderClause = "";
+rebuildDB.MaxRecords = 0;
+
+// 同步到缓存和下拉框
+Reason_SET.CommentStore = inputList;
+Comment_1.InputList = Reason_SET.CommentStore;
+Comment_1.Value = "";
+
+PnTrace("Reason_SET.CommentStore = " + Reason_SET.CommentStore, FuncScript.TRACE_LEVEL.INFO);
+PnTrace("Comment_1.InputList = " + Comment_1.InputList, FuncScript.TRACE_LEVEL.INFO);
+PnTrace("下拉框重建完成。", FuncScript.TRACE_LEVEL.INFO);

@@ -1,0 +1,251 @@
+'Option Explicit
+
+'Dim Start
+'Dim oParent
+'Dim sRecordUser
+'Dim oEditObject
+
+'' 1. 获取父对象引用
+'Set oParent = PnGetObjectEx("#PARENT")
+
+'If (oParent Is Nothing) Then
+'    PnTrace ">>> [严重错误] 父对象未找到！"
+'    This.Active = False
+'End If
+
+'' 2. 获取状态
+'Start = PnGetValue("#PARENT.Working")
+
+'PnTrace "--------------------------------------------------"
+'PnTrace ">>> [脚本触发] 状态变化为: " & CStr(Start)
+
+'' ============================================================
+'' 逻辑 A：启动瞬间 (Start 变为 True)
+'' ============================================================
+'If Start = True Then
+
+'    ' 记录开始时间
+'    oParent.A2 = CDate(Now)
+
+'    ' 固化本次单工单用户：只认首次输入用户
+'    sRecordUser = oParent.First_Input_User
+'    If Trim(sRecordUser & "") = "" Then
+'        sRecordUser = "AUTO"
+'    End If
+
+'    ' 假设 A5 为操作员字段（如不是，请替换为你的真实字段）
+'    oParent.A5 = sRecordUser
+
+'    PnTrace ">>> [启动逻辑] A2 (开始时间) 已设置为: " & CStr(oParent.A2)
+'    PnTrace ">>> [启动逻辑] 首次输入用户已固化为: " & CStr(sRecordUser)
+'    PnTrace ">>> [提示] 此时不读取 A1/A6，等待生产结束..."
+
+'End If
+
+'' ============================================================
+'' 逻辑 B：停止瞬间 (Start 变为 False) —— 保存数据
+'' ============================================================
+'If Start = False Then
+
+'    PnTrace ">>> [停止逻辑] 准备保存数据..."
+
+'    ' 1. 记录结束时间
+'    oParent.A3 = CDate(Now)
+'    PnTrace ">>> [步骤1] A3 (结束时间): " & CStr(oParent.A3)
+
+'    ' 2. 获取本次固定用户
+'    sRecordUser = oParent.First_Input_User
+'    If Trim(sRecordUser & "") = "" Then
+'        sRecordUser = oParent.A5
+'    End If
+'    If Trim(sRecordUser & "") = "" Then
+'        sRecordUser = "AUTO"
+'    End If
+
+'    ' 每次写库前都重新固定用户字段，避免异步读取串值
+'    oParent.A5 = sRecordUser
+
+'    ' 3. 打印关键值
+'    PnTrace ">>> [步骤2] 获取输入值 -> 工单(A1):[" & CStr(oParent.A1) & "] | 产品(A6):[" & CStr(oParent.A6) & "]"
+'    PnTrace ">>> [步骤2] 检查开始时间 -> A2:[" & CStr(oParent.A2) & "]"
+'    PnTrace ">>> [步骤2] 本次记录用户 -> A5:[" & CStr(oParent.A5) & "] | First_Input_User:[" & CStr(oParent.First_Input_User) & "]"
+
+'    ' ============================================================
+'    ' 判断 A1 是否为空
+'    ' ============================================================
+'    If Trim(oParent.A1 & "") = "" Then
+'        PnTrace ">>> [拦截] 警告：工单(A1)为空或界面上无值，已取消写入数据库！"
+'    Else
+'        PnTrace ">>> [步骤3] 字段赋值完成，准备执行 Insert..."
+
+'        Set oEditObject = PnGetObjectEx("Edit_JobOrder")
+
+'        If oEditObject Is Nothing Then
+'            PnTrace ">>> [严重错误] 找不到 Edit_JobOrder 对象！路径可能不对。"
+'        Else
+'            PnTrace ">>> [执行] 找到对象，正在插入数据库..."
+'            PnTrace ">>> [写库快照] A1=" & CStr(oParent.A1) & _
+'                ", A2=" & CStr(oParent.A2) & _
+'                ", A3=" & CStr(oParent.A3) & _
+'                ", A5=" & CStr(oParent.A5) & _
+'                ", A6=" & CStr(oParent.A6)
+
+'            oEditObject.ApplicationToDataBase = True
+'            PnSleep 1000
+'            oEditObject.DataBaseInsert = True
+'            PnTrace ">>> [成功] DataBaseInsert 指令已发送。"
+
+'            ' 补充复位，避免残留状态
+'            PnSleep 200
+'            oEditObject.DataBaseInsert = False
+'        End If
+
+'        PnTrace ">>> [步骤4] DataBaseInsert 指令已发送 (成功)"
+
+'        ' 写入完成后重置界面 / 当前工单信息
+'        oParent.A1 = ""
+'        oParent.A6 = ""
+'        oParent.A5 = ""
+'        oParent.First_Input_User = ""
+
+'        PnSleep 300
+'        PnTrace ">>> [结束] 界面已重置"
+'    End If
+'End If
+Option Explicit
+
+Dim oParent
+Dim sNewJob
+Dim sLastJob
+Dim sCurrentUser
+Dim sUserToSave
+Dim oEditObject
+Dim bHasPreviousJob
+Dim dtNow
+
+PnTrace ">>> [1] SaveJobOrderRecord 脚本开始"
+
+Set oParent = PnGetObjectEx("#PARENT")
+
+If (oParent Is Nothing) Then
+	PnTrace ">>> [严重错误] 父对象未找到！"
+	This.Active = False
+End If
+
+' 新工单号来自触发值
+sNewJob = Trim(This.TriggeringValue & "")
+sLastJob = Trim(oParent.Last_JobOrder & "")
+
+PnTrace ">>> [2] TriggeringValue = [" & CStr(This.TriggeringValue) & "]"
+PnTrace ">>> [3] 新工单 sNewJob = [" & sNewJob & "]"
+PnTrace ">>> [4] 上一工单 Last_JobOrder = [" & sLastJob & "]"
+PnTrace ">>> [5] 上一开始时间 Last_StartTime = [" & CStr(oParent.Last_StartTime) & "]"
+
+If sNewJob = "" Or sNewJob = "0" Then
+	PnTrace ">>> [停止点 A] 新工单为空或为0，不处理"
+	This.Active = False
+End If
+
+dtNow = CDate(Now)
+
+' 判断是否存在上一张有效工单
+bHasPreviousJob = False
+If sLastJob <> "" And sLastJob <> "0" Then
+	If Trim(oParent.Last_StartTime & "") <> "" And Trim(oParent.Last_StartTime & "") <> "0" Then
+		bHasPreviousJob = True
+	End If
+End If
+
+' ============================================================
+' 逻辑 A：先写上一工单
+' ============================================================
+If bHasPreviousJob = True Then
+
+	PnTrace ">>> [6] 检测到上一工单，准备写数据库"
+
+	' 用户：优先用当前界面上最终值；若为空再退回缓存
+	sUserToSave = Trim(oParent.A5 & "")
+	If sUserToSave = "" Then
+		sUserToSave = Trim(oParent.Last_User & "")
+	End If
+	If sUserToSave = "" Then
+		sUserToSave = "AUTO"
+	End If
+
+	' 写入数据库缓冲字段
+	oParent.DB1 = sLastJob                  ' 上一工单号（缓存）
+	oParent.DB2 = oParent.Last_StartTime    ' 上一工单开始时间（缓存）
+	oParent.DB3 = dtNow                     ' 上一工单结束时间（当前）
+	oParent.DB4 = oParent.A4                ' 当前设备号
+	oParent.DB5 = sUserToSave               ' 当前最终操作员
+	oParent.DB6 = Trim(oParent.A6 & "")     ' 当前最终备注
+	oParent.DB7 = Trim(oParent.A7 & "")     ' 当前最终预热炉编号
+
+	PnTrace ">>> [7] 写库快照：" & _
+		" DB1=[" & CStr(oParent.DB1) & "]" & _
+		" DB2=[" & CStr(oParent.DB2) & "]" & _
+		" DB3=[" & CStr(oParent.DB3) & "]" & _
+		" DB4=[" & CStr(oParent.DB4) & "]" & _
+		" DB5=[" & CStr(oParent.DB5) & "]" & _
+		" DB6=[" & CStr(oParent.DB6) & "]" & _
+		" DB7=[" & CStr(oParent.DB7) & "]"
+
+	Set oEditObject = PnGetObjectEx("Edit_JobOrder")
+
+	If oEditObject Is Nothing Then
+		PnTrace ">>> [严重错误] 找不到 Edit_JobOrder 对象！"
+	Else
+		PnTrace ">>> [8] 已找到 Edit_JobOrder，开始写库"
+
+		oEditObject.ApplicationToDataBase = True
+		PnTrace ">>> [9] ApplicationToDataBase = True"
+		PnSleep 500
+
+		oEditObject.DataBaseInsert = True
+		PnTrace ">>> [10] DataBaseInsert = True"
+		PnSleep 1000
+
+		oEditObject.DataBaseInsert = False
+		PnTrace ">>> [11] DataBaseInsert = False"
+		PnSleep 300
+	End If
+
+Else
+	PnTrace ">>> [6] 没有上一张有效工单，本次不写库，只登记开始时间"
+End If
+
+' ============================================================
+' 逻辑 B：登记当前工单
+' ============================================================
+sCurrentUser = Trim(oParent.First_Input_User & "")
+If sCurrentUser = "" Then
+	sCurrentUser = Trim(oParent.A5 & "")
+End If
+If sCurrentUser = "" Then
+	sCurrentUser = "AUTO"
+End If
+
+' 当前显示字段
+oParent.A1 = sNewJob
+oParent.A2 = dtNow
+oParent.A5 = sCurrentUser
+
+' 只缓存那些“在工单开始瞬间就确定”的字段
+oParent.Last_JobOrder = sNewJob
+oParent.Last_StartTime = dtNow
+oParent.Last_User = sCurrentUser
+
+PnTrace ">>> [12] 当前工单登记完成：" & _
+	" A1=[" & CStr(oParent.A1) & "]" & _
+	" A2=[" & CStr(oParent.A2) & "]" & _
+	" A4=[" & CStr(oParent.A4) & "]" & _
+	" A5=[" & CStr(oParent.A5) & "]" & _
+	" A6=[" & CStr(oParent.A6) & "]" & _
+	" A7=[" & CStr(oParent.A7) & "]"
+
+PnTrace ">>> [13] Last_* 缓存完成：" & _
+	" Last_JobOrder=[" & CStr(oParent.Last_JobOrder) & "]" & _
+	" Last_StartTime=[" & CStr(oParent.Last_StartTime) & "]" & _
+	" Last_User=[" & CStr(oParent.Last_User) & "]"
+
+PnTrace ">>> [14] SaveJobOrderRecord 脚本结束"

@@ -1,0 +1,22 @@
+var txt = Parent as Value.Equators;
+if (txt == null)
+{
+	PnTrace("Parent 不是 Txt_Test.Txt", FuncScript.TRACE_LEVEL.ERROR);
+	return;
+}
+
+// 如果 Ping 不通，认为设备停机/断电
+if (ping.Value == false)
+{
+	txt.Final_Status_Code = 3;
+	return;
+}
+
+// Ping 通时，再根据 txt 脚本判断运行/待机
+if (txt.Device_Status_Code == 1)
+{
+	txt.Final_Status_Code = 1;
+	return;
+}
+
+txt.Final_Status_Code = 2;

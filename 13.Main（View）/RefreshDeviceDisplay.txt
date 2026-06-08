@@ -1,0 +1,302 @@
+var APP = PnGetObjectEx("/$_SYSTEM/APP") as CODRA_System.AppConfig;
+
+if (APP == null)
+{
+	PnTrace("RefreshDeviceDisplay失败：找不到当前会话 /$_SYSTEM/APP", FuncScript.TRACE_LEVEL.ERROR);
+	return;
+}
+
+string currentLanguage = APP.CurrentLanguage.ToString();
+int count = 0;
+
+PnTrace("RefreshDeviceDisplay开始执行，CurrentLanguage=" + currentLanguage, FuncScript.TRACE_LEVEL.INFO);
+
+// ==================== 1. Device_Wax 类设备 ====================
+string[] deviceWaxPaths = new string[]
+{
+	"/Main/Wax/MPI_1/Device",
+	"/Main/Wax/MPI_2/Device",
+	"/Main/Wax/MPI_3/Device",
+	"/Main/Wax/MPI_4/Device",
+	"/Main/Wax/CTM_1/Device",
+	"/Main/Wax/CTM_2/Device",
+	"/Main/Wax/CTM_3/Device",
+	"/Main/Sand_blasting/Sand_blasting1/Device",
+	"/Main/Sand_blasting/Sand_blasting2/Device",
+	"/Main/Sand_blasting/Sand_blasting3/Device",
+	"/Main/Sand_blasting/Sand_blasting4/Device",
+	"/Main/Sand_blasting/Sand_blasting5/Device"
+};
+
+foreach (var path in deviceWaxPaths)
+{
+	var dev = PnGetObjectEx(path) as Device_SCADA.Device_Wax;
+	if (dev == null)
+	{
+		PnTrace("RefreshDeviceDisplay警告：无法转换为 Device_SCADA.Device_Wax -> " + path, FuncScript.TRACE_LEVEL.WARNING);
+		continue;
+	}
+
+	if (currentLanguage == "4")
+	{
+		dev.Display_Device_Name = dev.Device_Name_zh;
+		dev.Display_Device_Type = dev.Device_Type_zh;
+	}
+	else if (currentLanguage == "9")
+	{
+		dev.Display_Device_Name = dev.Device_Name_en;
+		dev.Display_Device_Type = dev.Device_Type_en;
+	}
+	else
+	{
+		dev.Display_Device_Name = dev.Device_Name_en;
+		dev.Display_Device_Type = dev.Device_Type_en;
+	}
+
+	count++;
+}
+
+// ==================== 2. Device_Washing 类设备 ====================
+string[] deviceWashingPaths = new string[]
+{
+	"/Main/Washing/Washing/Device"
+};
+
+foreach (var path in deviceWashingPaths)
+{
+	var dev = PnGetObjectEx(path) as Device_SCADA.Device_Washing;
+	if (dev == null)
+	{
+		PnTrace("RefreshDeviceDisplay警告：无法转换为 Device_SCADA.Device_Washing -> " + path, FuncScript.TRACE_LEVEL.WARNING);
+		continue;
+	}
+
+	if (currentLanguage == "4")
+	{
+		dev.Display_Device_Name = dev.Device_Name_zh;
+		dev.Display_Device_Type = dev.Device_Type_zh;
+	}
+	else if (currentLanguage == "9")
+	{
+		dev.Display_Device_Name = dev.Device_Name_en;
+		dev.Display_Device_Type = dev.Device_Type_en;
+	}
+	else
+	{
+		dev.Display_Device_Name = dev.Device_Name_en;
+		dev.Display_Device_Type = dev.Device_Type_en;
+	}
+
+	count++;
+}
+
+// ==================== 3. Device1 类设备 ====================
+string[] device1Paths = new string[]
+{
+	"/Main/Vacuum_chamber/Vacuum_Chamber1/Device",
+	"/Main/Vacuum_chamber/Vacuum_Chamber2/Device",
+	"/Main/Fridge/Fridge1/Device",
+	"/Main/Fridge/Fridge2/Device",
+	"/Main/Fridge/Fridge3/Device",
+	"/Main/Fridge/Fridge4/Device",
+	"/Main/Fridge/Fridge5/Device",
+	"/Main/Fridge/Fridge6/Device",
+	"/Main/Fridge/Fridge7/Device",
+	"/Main/Fridge/Fridge8/Device",
+	"/Main/AutoClave/LBBC1/Device",
+	"/Main/AutoClave/LBBC2/Device",
+	"/Main/Baking/Baking1/Device",
+	"/Main/Baking/Baking2/Device",
+	"/Main/Baking/Baking3/Device",
+	"/Main/Baking/Baking4/Device",
+	"/Main/Baking/Baking5/Device",
+	"/Main/Heat_treatment/SAMT/Device",
+	"/Main/Heat_treatment/SECO/Device",
+    "/Main/Macro_line/Macro_line/Device",
+	"/Main/Heat_treatment/HHZY/Device",
+	"/Main/FPI/FPI1/Device",
+	"/Main/FPI/FPI2/Device"
+};
+
+foreach (var path in device1Paths)
+{
+	var dev = PnGetObjectEx(path) as Device_SCADA.Device1;
+	if (dev == null)
+	{
+		PnTrace("RefreshDeviceDisplay警告：无法转换为 Device_SCADA.Device1 -> " + path, FuncScript.TRACE_LEVEL.WARNING);
+		continue;
+	}
+
+	if (currentLanguage == "4")
+	{
+		dev.Display_Device_Name = dev.Device_Name_zh;
+		dev.Display_Device_Type = dev.Device_Type_zh;
+	}
+	else if (currentLanguage == "9")
+	{
+		dev.Display_Device_Name = dev.Device_Name_en;
+		dev.Display_Device_Type = dev.Device_Type_en;
+	}
+	else
+	{
+		dev.Display_Device_Name = dev.Device_Name_en;
+		dev.Display_Device_Type = dev.Device_Type_en;
+	}
+
+	count++;
+}
+
+// ==================== 4. Device 类设备 ====================
+string[] devicePaths = new string[]
+{
+	"/Main/Dry_cleaner/Dry_Cleaning/Device",
+	"/Main/Knock/Knock/Device"
+};
+
+foreach (var path in devicePaths)
+{
+	var dev = PnGetObjectEx(path) as Device_SCADA.Device;
+	if (dev == null)
+	{
+		PnTrace("RefreshDeviceDisplay警告：无法转换为 Device_SCADA.Device -> " + path, FuncScript.TRACE_LEVEL.WARNING);
+		continue;
+	}
+
+	if (currentLanguage == "4")
+	{
+		dev.Display_Device_Name = dev.Device_Name_zh;
+		dev.Display_Device_Type = dev.Device_Type_zh;
+	}
+	else if (currentLanguage == "9")
+	{
+		dev.Display_Device_Name = dev.Device_Name_en;
+		dev.Display_Device_Type = dev.Device_Type_en;
+	}
+	else
+	{
+		dev.Display_Device_Name = dev.Device_Name_en;
+		dev.Display_Device_Type = dev.Device_Type_en;
+	}
+
+	count++;
+}
+
+// ==================== 5. Device_OEE 类设备 ====================
+string[] deviceOeePaths = new string[]
+{
+	"/Main/Laser_marking/Laser_marking/Device",
+	"/Main/Equators/Equators1/Device",
+	"/Main/Equators/Equators2/Device",
+	"/Main/Mold_cutting_machine/Mold_Cutting/Device",
+	"/Main/Xray/Xray1/Device",
+	"/Main/Xray/Xray2/Device",
+	"/Main/CMMS/CMMS1/Device",
+	"/Main/CMMS/CMMS2/Device",
+	"/Main/CMMS/CMMS3/Device",
+	"/Main/CMMS/CMMS4/Device",
+	"/Main/CMMS/CMMS5/Device",
+	"/Main/CMMS/CMMS6/Device",
+	"/Main/CMMS/CMMS7/Device",
+	"/Main/CMMS/CMMS8/Device"
+};
+
+foreach (var path in deviceOeePaths)
+{
+	var dev = PnGetObjectEx(path) as Device_SCADA.Device_OEE;
+	if (dev == null)
+	{
+		PnTrace("RefreshDeviceDisplay警告：无法转换为 Device_SCADA.Device_OEE -> " + path, FuncScript.TRACE_LEVEL.WARNING);
+		continue;
+	}
+
+	if (currentLanguage == "4")
+	{
+		dev.Display_Device_Name = dev.Device_Name_zh;
+		dev.Display_Device_Type = dev.Device_Type_zh;
+	}
+	else if (currentLanguage == "9")
+	{
+		dev.Display_Device_Name = dev.Device_Name_en;
+		dev.Display_Device_Type = dev.Device_Type_en;
+	}
+	else
+	{
+		dev.Display_Device_Name = dev.Device_Name_en;
+		dev.Display_Device_Type = dev.Device_Type_en;
+	}
+
+	count++;
+}
+
+// ==================== 6. Device Casting类设备 ====================
+string[] deviceCastingPaths = new string[]
+{
+	"/Main/Casting/Casting1/Device",
+	"/Main/Casting/Casting2/Device",
+	"/Main/Casting/Casting3/Device"
+};
+
+foreach (var path in deviceCastingPaths)
+{
+	var dev =PnGetObjectEx(path) as Device_SCADA.Device_Casting;
+	if (dev == null)
+	{
+		PnTrace("RefreshDeviceDisplay警告：无法转换为 Device_SCADA.Device -> " + path, FuncScript.TRACE_LEVEL.WARNING);
+		continue;
+	}
+
+	if (currentLanguage == "4")
+	{
+		dev.Display_Device_Name = dev.Device_Name_zh;
+		dev.Display_Device_Type = dev.Device_Type_zh;
+	}
+	else if (currentLanguage == "9")
+	{
+		dev.Display_Device_Name = dev.Device_Name_en;
+		dev.Display_Device_Type = dev.Device_Type_en;
+	}
+	else
+	{
+		dev.Display_Device_Name = dev.Device_Name_en;
+		dev.Display_Device_Type = dev.Device_Type_en;
+	}
+
+	count++;
+}
+// ==================== 7. Device_VA 类设备 ====================
+string[] deviceVAPaths = new string[]
+{
+	"/Main/VATECH/VATECH1/Device",
+	"/Main/VATECH/VATECH2/Device",
+	"/Main/VATECH/VATECH3/Device"
+};
+
+foreach (var path in deviceVAPaths)
+{
+	var dev = PnGetObjectEx(path) as Device_SCADA.Device_VA;
+	if (dev == null)
+	{
+		PnTrace("RefreshDeviceDisplay警告：无法转换为 Device_SCADA.Device1 -> " + path, FuncScript.TRACE_LEVEL.WARNING);
+		continue;
+	}
+
+	if (currentLanguage == "4")
+	{
+		dev.Display_Device_Name = dev.Device_Name_zh;
+		dev.Display_Device_Type = dev.Device_Type_zh;
+	}
+	else if (currentLanguage == "9")
+	{
+		dev.Display_Device_Name = dev.Device_Name_en;
+		dev.Display_Device_Type = dev.Device_Type_en;
+	}
+	else
+	{
+		dev.Display_Device_Name = dev.Device_Name_en;
+		dev.Display_Device_Type = dev.Device_Type_en;
+	}
+
+	count++;
+}
+
+PnTrace("RefreshDeviceDisplay成功：Language=" + currentLanguage + "，已刷新设备数=" + count.ToString(), FuncScript.TRACE_LEVEL.INFO);

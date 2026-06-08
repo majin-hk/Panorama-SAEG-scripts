@@ -1,0 +1,39 @@
+string tracePrefix = "DeviceHistoryQuery - ";
+string currentDevice = "";
+
+PnTrace(tracePrefix + "脚本开始执行", FuncScript.TRACE_LEVEL.INFO);
+
+// 稍微延迟，避免和页面初始化/状态切换抢时序
+PnSleep(300);
+
+// 1. 从宿主页面读取当前设备号
+var parentObj = PnGetObjectEx("../#PARENT") as Device_SCADA.Device_VA;
+if (parentObj == null)
+{
+	PnTrace(tracePrefix + "父对象转换失败", FuncScript.TRACE_LEVEL.ERROR);
+	return;
+}
+
+currentDevice = parentObj.Device_Number.ToString();
+PnTrace(tracePrefix + "Device_Number=[" + currentDevice + "]", FuncScript.TRACE_LEVEL.INFO);
+
+// 2. 判空保护
+if (string.IsNullOrEmpty(currentDevice))
+{
+	PnTrace(tracePrefix + "设备为空，取消自动刷新", FuncScript.TRACE_LEVEL.WARNING);
+	return;
+}
+
+// 3. 同步给 TableRead 使用的筛选控件
+Filter_Device.Value = currentDevice;
+Filter_BatchNumber.Value = "";
+Filter_Comment.Value = "";
+PnTrace(tracePrefix + "筛选控件已同步，设备=[" + currentDevice + "]", FuncScript.TRACE_LEVEL.INFO);
+
+// 4. 等待控件值稳定
+PnSleep(800);
+PnTrace(tracePrefix + "延迟结束，准备触发 TableRead", FuncScript.TRACE_LEVEL.INFO);
+
+// 5. 启动统一查询脚本
+TableRead.Active = true;
+PnTrace(tracePrefix + "已触发 TableRead", FuncScript.TRACE_LEVEL.INFO);

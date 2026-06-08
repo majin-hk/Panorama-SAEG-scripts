@@ -1,0 +1,317 @@
+'Option Explicit 
+
+'' ================= 配置区域 =================
+'Const DB_DELAY = 300    ' 数据库单行写入延时(ms) 确保多行按顺序写入不卡死
+'' ===========================================
+
+'Dim oEditBatch, oEditJob
+'Dim bCurrWork, bLastWork
+'Dim sBatchID, sJobList
+'Dim dtStartTime, dtEndTime
+'Dim arrJobs, j, sSingleJob
+
+'' 1. 获取两个数据库对象 (请将括号里的名字换成你界面上实际的控件名)
+'Set oEditBatch = PnGetObjectEx("Edit_JobOrder") 
+'Set oEditJob = PnGetObjectEx("Edit_Batch")   
+
+'If (oEditBatch Is Nothing) Or (oEditJob Is Nothing) Then
+'    PnTrace ">>> [Error] 数据库对象未找到，请检查控件名称！"
+'Else
+'    ' 获取当前设备总状态与上一周期状态
+'    bCurrWork = PnGetValue("#PARENT.Working")
+'    bLastWork = PnGetValue("#PARENT.Batch_Last_Working_State") 
+
+'    ' =================================================================
+'    ' 逻辑 A: 批次启动 (上升沿) -> 记录开始时间到全局变量
+'    ' =================================================================
+'    If (bCurrWork = True) And (bLastWork = False) Then
+        
+'        PnTrace ">>>[批次启动] 记录批次开始时间..."
+'        PnSetValue "#PARENT.Batch_Start_Time", CStr(Now)
+
+'        ' =================================================================
+'        ' 逻辑 B: 批次结束 (下降沿) -> 分别写入主表与从表
+'        ' =================================================================
+'    ElseIf (bCurrWork = False) And (bLastWork = True) Then
+        
+'        PnTrace ">>> [批次结束] 开始处理数据..."
+        
+'        ' 提前获取批次号与工单列表
+'        sBatchID = PnGetValue("#PARENT.Batch_Number")
+'        sJobList = PnGetValue("#PARENT.Batch_Job_List")
+        
+'        ' =================================================================
+'        ' [新增条件] 判断 批次号 或 工单列表 是否为空
+'        ' =================================================================
+'        ' 使用 Or：只要其中一个为空(或全是空格)，就不写入数据库
+'        ' 如果你想改成“必须两个同时为空才不写入”，可以把 Or 改成 And
+'        If Trim(sBatchID & "") = "" Or Trim(sJobList & "") = "" Then
+'            PnTrace ">>> [拦截] 警告：批次号或工单数据为空(界面无输入)，已取消写入数据库！"
+'        Else
+'            ' 只有两个都不为空时，才执行写入数据库的逻辑
+            
+'            dtStartTime = PnGetValue("#PARENT.Batch_Start_Time")
+'            If dtStartTime = "" Then dtStartTime = CStr(Now)
+'            dtEndTime = CStr(Now) 
+            
+'            ' -------------------------------------------------------------
+'            ' 【第 1 步】：写入“批次主表” （整个批次只执行 1 次！）
+'            ' -------------------------------------------------------------
+'            PnTrace ">>> [写入] 正在生成主表批次记录: " & sBatchID
+            
+'            ' 给主表的时间变量赋值 (假设过程参数你已经直接绑定在控件列上了)
+'            PnSetValue "#PARENT.DB_Buffer_A2", dtStartTime 
+'            PnSetValue "#PARENT.DB_Buffer_A3", dtEndTime   
+            
+'            ' 触发主表保存
+'            oEditBatch.ApplicationToDataBase = True
+'            PnSleep 200
+'            oEditBatch.DataBaseInsert = True
+'            PnSleep DB_DELAY
+
+'Option Explicit
+'' ================= 配置区域 =================
+'Const DB_DELAY = 150    ' 数据库写入间隔，从 500 缩短到 150 (视数据库响应速度可调)
+'' ===========================================
+'Dim oEditJob,oEditBatch
+'Dim bCurrWork, bLastWork
+'Dim sBatchID, sJobList
+'Dim dtStartTime, dtEndTime
+'Dim arrJobs, j, sSingleJob
+'Dim sRecordUser,sStartedUser
+'Set oEditJob = PnGetObjectEx("Edit_JobOrder")
+'Set oEditBatch = PnGetObjectEx("Edit_Batch")
+'If (oEditJob Is Nothing) Then
+'    PnTrace ">>> [Error] 数据库对象 Edit_JobOrder 未找到！"
+'Else
+'    bCurrWork = PnGetValue("#PARENT.Working")
+'    bLastWork = PnGetValue("#PARENT.Batch_Last_Working_State")
+'    code
+'    Code
+'    If (bCurrWork = True) And (bLastWork = False) Then
+'        ' 批次启动：只记时间
+'        PnSetValue "#PARENT.Batch_Start_Time", CStr(Now)
+    
+
+'        sStartedUser = PnGetValue("#PARENT.Current_User_Cache") 
+'        PnSetValue "#PARENT.DB_Operator_Name", sStartedUser 
+
+'        PnTrace ">>> [批次启动] 记录操作员: " & sStartedUser
+
+'    ElseIf (bCurrWork = False) And (bLastWork = True) Then
+'        ' 批次结束：开始写入
+'        sBatchID = PnGetValue("#PARENT.Batch_Number")
+'        sJobList = PnGetValue("#PARENT.Batch_Job_List")
+    
+'        ' [关键点] 获取当初启时存下的那个用户名
+'        sRecordUser = PnGetValue("#PARENT.DB_Operator_Name")
+    
+'        ' 只有当有数据时才进行数据库插入操作
+'        If Trim(sBatchID & "") <> "" And Trim(sJobList & "") <> "" Then
+'            dtStartTime = PnGetValue("#PARENT.Batch_Start_Time")
+'            If dtStartTime = "" Then dtStartTime = CStr(Now)
+'            dtEndTime = CStr(Now) 
+        
+'            ' 循环外赋值
+'            PnSetValue "#PARENT.Batch_Number", sBatchID           
+'            PnSetValue "#PARENT.DB_Buffer_A2", dtStartTime        
+'            PnSetValue "#PARENT.DB_Buffer_A3", dtEndTime
+'            PnSetValue "#PARENT.DB_Buffer_A5", sRecordUser 
+'            ' 格式化列表
+'            sJobList = Replace(sJobList, "，", ",")
+'            sJobList = Replace(sJobList, ";", ",")
+'            sJobList = Replace(sJobList, "；", ",")
+'            sJobList = Replace(sJobList, vbCrLf, ",")
+'            arrJobs = Split(sJobList, ",")
+        
+'            PnTrace ">>> [开始写入] 总数: " & (UBound(arrJobs) + 1)
+
+'            ' 进入循环
+'            For j = 0 To UBound(arrJobs)
+'                sSingleJob = Trim(arrJobs(j)) 
+            
+'                If Len(sSingleJob) > 0 Then
+'                    ' 只需要更新变化的工单号
+'                    PnSetValue "#PARENT.Batch_Current_Job_Order", sSingleJob 
+                
+'                    ' 执行写入触发
+'                    oEditJob.ApplicationToDataBase = True
+'                    oEditBatch.ApplicationToDataBase = True
+'                    oEditJob.DataBaseInsert = True
+'                    oEditBatch.DataBaseInsert = True
+                
+'                    ' 响应时间
+'                    PnSleep DB_DELAY 
+                
+'                    ' 复位触发位
+'                    oEditJob.DataBaseInsert = False 
+'                    PnSleep 50 
+'                End If
+'            Next
+        
+'            PnTrace ">>> [写入完成] 耗时约 " & ((DB_DELAY + 50) * (UBound(arrJobs) + 1) / 1000) & " 秒"
+'        End If 
+    
+'        ' ========================================================
+'        ' [修改点] 清理逻辑移到了 If 块外面，确保批次结束后强制清理
+'        ' ========================================================
+'        PnSetValue "#PARENT.Batch_Job_List", ""   
+'        PnSetValue "#PARENT.Batch_Number", ""  
+'        PnSetValue "#PARENT.Batch_Start_Time", "" ' 建议顺便清空时间，避免残留
+'        PnSetValue "#PARENT.DB_Operator_Name", "" ' 清空该批次的操作员记录
+'        PnTrace ">>> [清理完毕] 批次信息已重置"
+'    End If
+
+'    PnSetValue "#PARENT.Batch_Last_Working_State", bCurrWork
+Option Explicit
+
+' ================= 配置区域 =================
+Const DB_DELAY = 150
+' ===========================================
+
+Dim oEditJob, oEditBatch, oParent
+Dim bCurrWork, bLastWork
+Dim sBatchID, sJobList
+Dim dtStartTime, dtEndTime
+Dim arrJobs, j, sSingleJob
+Dim sRecordUser, sStartedUser
+
+Set oEditJob = PnGetObjectEx("Edit_JobOrder")
+Set oEditBatch = PnGetObjectEx("Edit_Batch")
+Set oParent = PnGetObjectEx("#PARENT")
+
+If (oParent Is Nothing) Then
+	PnTrace ">>> [Error] 父对象未找到！"
+	This.Active = False
+End If
+
+If (oEditJob Is Nothing) Then
+	PnTrace ">>> [Error] 数据库对象 Edit_JobOrder 未找到！"
+	This.Active = False
+End If
+
+If (oEditBatch Is Nothing) Then
+	PnTrace ">>> [Error] 数据库对象 Edit_Batch 未找到！"
+	This.Active = False
+End If
+
+bCurrWork = oParent.Working
+bLastWork = oParent.Batch_Last_Working_State
+
+PnTrace ">>> [Enter] Working=" & CStr(bCurrWork) & _
+	", Last=" & CStr(bLastWork)
+
+If (bCurrWork = True) And (bLastWork = False) Then
+	' ========================================================
+	' 批次启动：只记录开始信息
+	' ========================================================
+	oParent.Batch_Start_Time = CStr(Now)
+
+	sStartedUser = oParent.Batch_First_Input_User
+	If Trim(sStartedUser & "") = "" Then
+		sStartedUser = "AUTO"
+	End If
+
+	oParent.DB_Operator_Name = sStartedUser
+
+	' 启动逻辑完成后，再置位 Last=True
+	oParent.Batch_Last_Working_State = True
+
+	PnTrace ">>> [批次启动] 记录操作员: " & CStr(sStartedUser)
+
+ElseIf (bCurrWork = False) And (bLastWork = True) Then
+	' ========================================================
+	' 批次结束：执行数据库写入
+	' ========================================================
+	sBatchID = oParent.Batch_Number
+	sJobList = oParent.Batch_Job_List
+	sRecordUser = oParent.Batch_First_Input_User
+	If Trim(sRecordUser & "") = "" Then
+		sRecordUser = oParent.DB_Operator_Name
+	End If
+	If Trim(sRecordUser & "") = "" Then
+		sRecordUser = "AUTO"
+	End If
+
+	PnTrace ">>> [批次结束] BatchID=" & CStr(sBatchID) & _
+		", JobList=" & CStr(sJobList) & _
+		", User=" & CStr(sRecordUser)
+
+	' 只有当有数据时才进行数据库插入操作
+	If Trim(sBatchID & "") <> "" And Trim(sJobList & "") <> "" Then
+
+		dtStartTime = oParent.Batch_Start_Time
+		If dtStartTime = "" Then
+			dtStartTime = CStr(Now)
+		End If
+		dtEndTime = CStr(Now)
+
+		' 循环外赋值
+		oParent.Batch_Number = sBatchID
+		oParent.DB_Buffer_A2 = dtStartTime
+		oParent.DB_Buffer_A3 = dtEndTime
+		oParent.DB_Buffer_A5 = sRecordUser
+
+		' 格式化列表
+		sJobList = Replace(sJobList, "，", ",")
+		sJobList = Replace(sJobList, ";", ",")
+		sJobList = Replace(sJobList, "；", ",")
+		sJobList = Replace(sJobList, vbCrLf, ",")
+		arrJobs = Split(sJobList, ",")
+
+		PnTrace ">>> [开始写入] 总数: " & (UBound(arrJobs) + 1)
+
+		For j = 0 To UBound(arrJobs)
+			sSingleJob = Trim(arrJobs(j))
+
+			If Len(sSingleJob) > 0 Then
+				' 每条记录都重新固定当前写库快照
+				oParent.Batch_Number = sBatchID
+				oParent.Batch_Current_Job_Order = sSingleJob
+				oParent.DB_Buffer_A2 = dtStartTime
+				oParent.DB_Buffer_A3 = dtEndTime
+				oParent.DB_Buffer_A5 = sRecordUser
+
+				PnTrace ">>> [插入前快照] Job=" & CStr(sSingleJob) & _
+					", User=" & CStr(sRecordUser) & _
+					", Batch=" & CStr(sBatchID)
+
+				' 执行写入触发
+				oEditJob.ApplicationToDataBase = True
+				oEditBatch.ApplicationToDataBase = True
+				oEditJob.DataBaseInsert = True
+				oEditBatch.DataBaseInsert = True
+
+				' 等待数据库响应
+				PnSleep DB_DELAY
+
+				' 复位触发位
+				oEditJob.DataBaseInsert = False
+				oEditBatch.DataBaseInsert = False
+				PnSleep 50
+			End If
+		Next
+		PnTrace ">>> [写入完成] 耗时约 " & _
+			((DB_DELAY + 50) * (UBound(arrJobs) + 1) / 1000) & " 秒"
+	Else
+		PnTrace ">>> [Skip] Batch_Number 或 Batch_Job_List 为空，跳过写库"
+	End If
+
+	' ========================================================
+	' 无论是否写库，只要判定为批次结束，都执行清理
+	' ========================================================
+	oParent.Batch_Job_List = ""
+	oParent.Batch_Number = ""
+	oParent.Batch_Start_Time = CStr(Now)
+	oParent.DB_Operator_Name = ""
+	oParent.Batch_First_Input_User = ""
+
+
+	' 最后一步：复位 Last=False
+	oParent.Batch_Last_Working_State = False
+
+	PnTrace ">>> [清理完毕] 批次信息已重置"
+
+Else
+	PnTrace ">>> [NoAction] 无需处理"
+End If

@@ -1,0 +1,322 @@
+'Option Explicit
+
+'' ================= 配置区域 =================
+'Const DB_DELAY = 150
+'' ===========================================
+
+'Dim oEditJob, oEditBatch, oParent
+'Dim bCurrWork, bLastWork
+'Dim sBatchID, sJobList
+'Dim dtStartTime, dtEndTime
+'Dim arrJobs, j, sSingleJob
+'Dim sRecordUser, sStartedUser
+
+'Set oEditJob = PnGetObjectEx("Edit_JobOrder")
+'Set oEditBatch = PnGetObjectEx("Edit_Batch")
+'Set oParent = PnGetObjectEx("#PARENT")
+
+'If (oParent Is Nothing) Then
+'    PnTrace ">>> [Error] 父对象未找到！"
+'    This.Active = False
+'End If
+
+'If (oEditJob Is Nothing) Then
+'    PnTrace ">>> [Error] 数据库对象 Edit_JobOrder 未找到！"
+'    This.Active = False
+'End If
+
+'If (oEditBatch Is Nothing) Then
+'    PnTrace ">>> [Error] 数据库对象 Edit_Batch 未找到！"
+'    This.Active = False
+'End If
+
+'bCurrWork = oParent.Working
+'bLastWork = oParent.Batch_Last_Working_State
+
+'PnTrace ">>> [Enter] Working=" & CStr(bCurrWork) & _
+'    ", Last=" & CStr(bLastWork)
+
+'If (bCurrWork = True) And (bLastWork = False) Then
+'    ' ========================================================
+'    ' 批次启动：只记录开始信息
+'    ' ========================================================
+'    oParent.Batch_Start_Time = CStr(Now)
+
+'    sStartedUser = oParent.Batch_First_Input_User
+'    If Trim(sStartedUser & "") = "" Then
+'        sStartedUser = "AUTO"
+'    End If
+
+'    oParent.DB_Operator_Name = sStartedUser
+
+'    ' 启动逻辑完成后，再置位 Last=True
+'    oParent.Batch_Last_Working_State = True
+
+'    PnTrace ">>> [批次启动] 记录操作员: " & CStr(sStartedUser)
+
+'ElseIf (bCurrWork = False) And (bLastWork = True) Then
+'    ' ========================================================
+'    ' 批次结束：执行数据库写入
+'    ' ========================================================
+'    sBatchID = oParent.Batch_Number
+'    sJobList = oParent.Batch_Job_List
+'    sRecordUser = oParent.Batch_First_Input_User
+'    If Trim(sRecordUser & "") = "" Then
+'        sRecordUser = oParent.DB_Operator_Name
+'    End If
+'    If Trim(sRecordUser & "") = "" Then
+'        sRecordUser = "AUTO"
+'    End If
+
+'    PnTrace ">>> [批次结束] BatchID=" & CStr(sBatchID) & _
+'        ", JobList=" & CStr(sJobList) & _
+'        ", User=" & CStr(sRecordUser)
+
+'    ' 只有当有数据时才进行数据库插入操作
+'    If Trim(sBatchID & "") <> "" And Trim(sJobList & "") <> "" Then
+
+'        dtStartTime = oParent.Batch_Start_Time
+'        If dtStartTime = "" Then
+'            dtStartTime = CStr(Now)
+'        End If
+'        dtEndTime = CStr(Now)
+
+'        ' 循环外赋值
+'        oParent.Batch_Number = sBatchID
+'        oParent.DB_Buffer_A2 = dtStartTime
+'        oParent.DB_Buffer_A3 = dtEndTime
+'        oParent.DB_Buffer_A5 = sRecordUser
+
+'        ' 格式化列表
+'        sJobList = Replace(sJobList, "，", ",")
+'        sJobList = Replace(sJobList, ";", ",")
+'        sJobList = Replace(sJobList, "；", ",")
+'        sJobList = Replace(sJobList, vbCrLf, ",")
+'        arrJobs = Split(sJobList, ",")
+
+'        PnTrace ">>> [开始写入] 总数: " & (UBound(arrJobs) + 1)
+
+'        For j = 0 To UBound(arrJobs)
+'            sSingleJob = Trim(arrJobs(j))
+
+'            If Len(sSingleJob) > 0 Then
+'                ' 每条记录都重新固定当前写库快照
+'                oParent.Batch_Number = sBatchID
+'                oParent.Batch_Current_Job_Order = sSingleJob
+'                oParent.DB_Buffer_A2 = dtStartTime
+'                oParent.DB_Buffer_A3 = dtEndTime
+'                oParent.DB_Buffer_A5 = sRecordUser
+
+'                PnTrace ">>> [插入前快照] Job=" & CStr(sSingleJob) & _
+'                    ", User=" & CStr(sRecordUser) & _
+'                    ", Batch=" & CStr(sBatchID)
+
+'                ' 执行写入触发
+'                oEditJob.ApplicationToDataBase = True
+'                oEditBatch.ApplicationToDataBase = True
+'                oEditJob.DataBaseInsert = True
+'                oEditBatch.DataBaseInsert = True
+
+'                ' 等待数据库响应
+'                PnSleep DB_DELAY
+
+'                ' 复位触发位
+'                oEditJob.DataBaseInsert = False
+'                oEditBatch.DataBaseInsert = False
+'                PnSleep 50
+'            End If
+'        Next
+'        PnTrace ">>> [写入完成] 耗时约 " & _
+'            ((DB_DELAY + 50) * (UBound(arrJobs) + 1) / 1000) & " 秒"
+'    Else
+'        PnTrace ">>> [Skip] Batch_Number 或 Batch_Job_List 为空，跳过写库"
+'    End If
+
+'    ' ========================================================
+'    ' 无论是否写库，只要判定为批次结束，都执行清理
+'    ' ========================================================
+'    oParent.Batch_Job_List = ""
+'    oParent.Batch_Number = ""
+'    oParent.Batch_Start_Time = CStr(Now)
+'    oParent.DB_Operator_Name = ""
+'    oParent.Batch_First_Input_User = ""
+
+
+'    ' 最后一步：复位 Last=False
+'    oParent.Batch_Last_Working_State = False
+
+'    PnTrace ">>> [清理完毕] 批次信息已重置"
+
+'Else
+'    PnTrace ">>> [NoAction] 无需处理"
+'End If
+Option Explicit
+
+' ================= 配置区域 =================
+Const DB_DELAY = 300
+' ===========================================
+
+Dim oEditJob, oEditBatch, oParent
+Dim sNewBatch, sLastBatch
+Dim sJobList
+Dim dtStartTime, dtEndTime
+Dim arrJobs, j, sSingleJob
+Dim sRecordUser, sStartedUser
+
+Set oEditJob = PnGetObjectEx("Edit_JobOrder")
+Set oEditBatch = PnGetObjectEx("Edit_Batch")
+Set oParent = PnGetObjectEx("#PARENT")
+
+If (oParent Is Nothing) Then
+	PnTrace ">>> [Error] 父对象未找到！"
+	This.Active = False
+End If
+
+If (oEditJob Is Nothing) Then
+	PnTrace ">>> [Error] 数据库对象 Edit_JobOrder 未找到！"
+	This.Active = False
+End If
+
+If (oEditBatch Is Nothing) Then
+	PnTrace ">>> [Error] 数据库对象 Edit_Batch 未找到！"
+	This.Active = False
+End If
+
+' ========================================================
+' 当前触发的新批次号
+' ========================================================
+sNewBatch = Trim(This.TriggeringValue & "")
+sLastBatch = Trim(oParent.Last_Batch_Number & "")
+
+PnTrace ">>> [Enter] 新批次=" & CStr(sNewBatch) & _
+	", 上一批次=" & CStr(sLastBatch)
+
+' 新批次为空则不处理
+If sNewBatch = "" Or sNewBatch = "0" Then
+	PnTrace ">>> [Skip] 新批次号为空或为0，跳过"
+	This.Active = False
+End If
+
+' 若批次号没变化，不处理
+If sNewBatch = sLastBatch Then
+	PnTrace ">>> [NoAction] 批次号未变化"
+	This.Active = False
+End If
+
+' ========================================================
+' A. 若存在上一批次，则先结束上一批次并写库
+' ========================================================
+If sLastBatch <> "" And sLastBatch <> "0" Then
+
+	sJobList = Trim(oParent.Batch_Job_List & "")
+	sRecordUser = Trim(oParent.Last_Batch_User & "")
+
+	If sRecordUser = "" Then
+		sRecordUser = Trim(oParent.Batch_First_Input_User & "")
+	End If
+	If sRecordUser = "" Then
+		sRecordUser = Trim(oParent.DB_Operator_Name & "")
+	End If
+	If sRecordUser = "" Then
+		sRecordUser = "AUTO"
+	End If
+
+	PnTrace ">>> [批次结束] LastBatch=" & CStr(sLastBatch) & _
+		", JobList=[" & CStr(sJobList) & "]" & _
+		", User=" & CStr(sRecordUser)
+
+	' 只有当有数据时才进行数据库插入操作
+	If sJobList <> "" Then
+
+		dtStartTime = oParent.Last_Batch_Start_Time
+		If Trim(dtStartTime & "") = "" Or Trim(dtStartTime & "") = "0" Then
+			dtStartTime = CDate(Now)
+		End If
+		dtEndTime = CDate(Now)
+
+		' 循环外缓冲字段赋值
+		oParent.DB_Buffer_A2 = dtStartTime
+		oParent.DB_Buffer_A3 = dtEndTime
+		oParent.DB_Buffer_A5 = sRecordUser
+
+		' 格式化列表
+		sJobList = Replace(sJobList, "，", ",")
+		sJobList = Replace(sJobList, ";", ",")
+		sJobList = Replace(sJobList, "；", ",")
+		sJobList = Replace(sJobList, vbCrLf, ",")
+		arrJobs = Split(sJobList, ",")
+
+		PnTrace ">>> [开始写入上一批次] Batch=" & sLastBatch & _
+			", 总数=" & (UBound(arrJobs) + 1)
+
+		For j = 0 To UBound(arrJobs)
+			sSingleJob = Trim(arrJobs(j))
+
+			If Len(sSingleJob) > 0 Then
+
+				' 使用 DB 缓冲字段，不改当前显示字段
+				oParent.DB_Batch_Number = sLastBatch
+				oParent.DB_Job_Order = sSingleJob
+				oParent.DB_Buffer_A2 = dtStartTime
+				oParent.DB_Buffer_A3 = dtEndTime
+				oParent.DB_Buffer_A5 = sRecordUser
+
+				PnTrace ">>> [插入前快照] #" & (j + 1) & _
+					" Batch=" & CStr(oParent.DB_Batch_Number) & _
+					", Job=" & CStr(oParent.DB_Job_Order) & _
+					", Start=" & CStr(oParent.DB_Buffer_A2) & _
+					", End=" & CStr(oParent.DB_Buffer_A3) & _
+					", User=" & CStr(oParent.DB_Buffer_A5)
+
+				oEditJob.ApplicationToDataBase = True
+				oEditBatch.ApplicationToDataBase = True
+				oEditJob.DataBaseInsert = True
+				oEditBatch.DataBaseInsert = True
+
+				PnSleep DB_DELAY
+
+				oEditJob.DataBaseInsert = False
+				oEditBatch.DataBaseInsert = False
+				PnSleep 100
+			End If
+		Next
+
+		PnTrace ">>> [写入完成] 上一批次=" & sLastBatch
+
+	Else
+		PnTrace ">>> [Skip] 上一批次的 Batch_Job_List 为空，跳过写库"
+	End If
+End If
+
+' ========================================================
+' B. 开启当前新批次
+' ========================================================
+oParent.Batch_Number = sNewBatch
+oParent.Batch_Start_Time = CDate(Now)
+
+sStartedUser = Trim(oParent.Batch_First_Input_User & "")
+If sStartedUser = "" Then
+	sStartedUser = Trim(oParent.DB_Operator_Name & "")
+End If
+If sStartedUser = "" Then
+	sStartedUser = "AUTO"
+End If
+
+oParent.DB_Operator_Name = sStartedUser
+
+' 缓存当前批次，供下次切换时使用
+oParent.Last_Batch_Number = sNewBatch
+oParent.Last_Batch_Start_Time = oParent.Batch_Start_Time
+oParent.Last_Batch_User = sStartedUser
+
+PnTrace ">>> [新批次开始] Batch=" & CStr(sNewBatch) & _
+	", Start=" & CStr(oParent.Batch_Start_Time) & _
+	", User=" & CStr(sStartedUser)
+
+' 新批次开始后清空工单列表，为新批次重新累计
+oParent.Batch_Job_List = ""
+
+' 可选：清空当前输入用户，等新批次重新输入
+oParent.Batch_First_Input_User = ""
+
+PnTrace ">>> [完成] 批次已切换到 " & CStr(sNewBatch)

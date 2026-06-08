@@ -1,0 +1,149 @@
+Option Explicit
+
+Dim sJobOrder, sBatchID, sOldComment, sNewComment
+Dim oRecord, oEdit, oField
+
+' 1. 启动调试
+PnTrace ">>> [更新脚本] 准备修改备注..."
+
+' 2. 外部校验：确保选中了行，且输入框不为空
+If Table.Value = "" Then
+	PnTrace ">>> [警告] 未选中任何行。"
+	
+End If
+
+sNewComment = Trim(Filter_Comment.Value)
+' 如果你想允许清空备注，可以注释掉下面这个判断
+If sNewComment = "" Then
+	' PnTrace ">>> [警告] 请在输入框输入新的备注内容。"
+	' Exit Sub
+End If
+
+' 3. 解析选中行数据
+oRecord = Split(Table.Value, "|")
+
+' 根据截图：Column 0是Job Order, 1是Batch, 2是Start, 3是End, 6是Comments
+' 确保数组长度至少到索引6
+If UBound(oRecord) < 6 Then
+	PnTrace ">>> [错误] 表格列数不匹配，无法解析数据。当前索引最大为: " & UBound(oRecord)
+
+End If
+
+' 获取主对象
+Set oEdit = PnGetObjectEx("../Edit_JobOrder")
+If oEdit Is Nothing Then
+	PnTrace ">>> [致命错误] 找不到 Edit_JobOrder 控件。"
+	
+End If
+
+' =======================================================
+' A. 提取定位信息 (用于 WHERE 条件)
+' =======================================================
+sJobOrder = Trim(oRecord(0))
+sBatchID = Trim(oRecord(1))
+sOldComment = Trim(oRecord(6))
+
+PnTrace ">>> [定位数据] 工单:" & sJobOrder & " | 批次:" & sBatchID
+
+' =======================================================
+' B. 设置【更新目标】 (UPDATE SET ...)
+' =======================================================
+' 假设 A6 绑定的是数据库中的 Comments 字段
+' 1. 给目标字段赋新值
+PnGetObjectEx("../Edit_JobOrder/A6").DataBaseValue = sNewComment
+
+' 2. 【核心优化】排除其他字段，确保只更新 Comments
+' 告诉控件：除了 A6，其他字段不要出现在 UPDATE 语句的 SET 后面
+' (假设 A0-A5 分别对应工单、批次、时间等)
+PnGetObjectEx("../Edit_JobOrder/A0").SetDataBaseValueToEmpty = True ' Job Order
+PnGetObjectEx("../Edit_JobOrder/A1").SetDataBaseValueToEmpty = True ' Batch Number
+PnGetObjectEx("../Edit_JobOrder/A2").SetDataBaseValueToEmpty = True ' Start Time
+PnGetObjectEx("../Edit_JobOrder/A3").SetDataBaseValueToEmpty = True ' End Time
+PnGetObjectEx("../Edit_JobOrder/A4").SetDataBaseValueToEmpty = True ' Device Number
+PnGetObjectEx("../Edit_JobOrder/A5").SetDataBaseValueToEmpty = True ' Operator
+
+' =======================================================
+' C. 构造【筛选条件】 (WHERE ...)
+' =======================================================
+' 使用 Job Order + Batch Number + Start Time 联合定位，确保唯一性
+
+' --- 条件 1: Job Order ---
+oEdit.Field1 = "Job Order"
+oEdit.Test1 = DB_SQL_TEST.EQ
+oEdit.Value1 = sJobOrder
+oEdit.Operator1 = DB_LOGICAL_OPERATOR.And
+
+' --- 条件 2: Batch Number ---
+oEdit.Field2 = "Batch Number"
+oEdit.Test2 = DB_SQL_TEST.EQ
+oEdit.Value2 = sBatchID
+oEdit.Operator2 = DB_LOGICAL_OPERATOR.And
+
+' --- 条件 3: Start Time ---
+If Trim(oRecord(2)) <> "" Then
+	oEdit.Field3 = "Start Time"
+	oEdit.Test3 = DB_SQL_TEST.EQ
+	oEdit.Value3 = ParseUniversalDate(oRecord(2))
+Else
+	oEdit.Field3 = "Start Time"
+	oEdit.Test3 = DB_SQL_TEST.IS_NULL
+End If
+oEdit.Operator3 = DB_LOGICAL_OPERATOR.And
+
+' --- 条件 4: End Time ---
+If Trim(oRecord(3)) <> "" Then
+	oEdit.Field4 = "End Time"
+	oEdit.Test4 = DB_SQL_TEST.EQ
+	oEdit.Value4 = ParseUniversalDate(oRecord(3))
+Else
+	oEdit.Field4 = "End Time"
+	oEdit.Test4 = DB_SQL_TEST.IS_NULL
+End If
+
+' =======================================================
+' D. 执行更新并收尾
+' =======================================================
+PnTrace ">>> [执行] 正在提交更新到数据库..."
+oEdit.DataBaseUpdate = True
+
+PnSleep 300       ' 留出数据库写入时间
+Table.Read        ' 刷新表格显示新数据
+Filter_Comment.Value = "" ' 清空备注输入框
+PnTrace ">>> [成功] 备注更新完成。"
+
+
+' =========================================================
+' 【核心函数】日期解析器 (适配 DD/MM/YYYY)
+' =========================================================
+Function ParseUniversalDate(strInput)
+	Dim parts, sDatePart, timePart, dateSubParts
+	Dim y, m, d
+    
+	strInput = Trim(strInput)
+	If strInput = "" Then ParseUniversalDate = "" : Exit Function
+
+	parts = Split(strInput, " ")
+	sDatePart = parts(0)
+	If UBound(parts) >= 1 Then timePart = parts(1) Else timePart = "00:00:00"
+    
+	' 处理多种分隔符
+	If InStr(sDatePart, "/") > 0 Then
+		dateSubParts = Split(sDatePart, "/")
+	ElseIf InStr(sDatePart, "-") > 0 Then
+		dateSubParts = Split(sDatePart, "-")
+	Else
+		ParseUniversalDate = strInput : Exit Function
+	End If
+    
+	If UBound(dateSubParts) = 2 Then
+		' 适配 20/03/2026 这种 DD/MM/YYYY 格式
+		If Len(dateSubParts(0)) = 4 Then ' YYYY/MM/DD
+			y = dateSubParts(0): m = dateSubParts(1): d = dateSubParts(2)
+		Else ' DD/MM/YYYY
+			d = dateSubParts(0): m = dateSubParts(1): y = dateSubParts(2)
+		End If
+		ParseUniversalDate = y & "-" & Right("0" & m, 2) & "-" & Right("0" & d, 2) & " " & timePart
+	Else
+		ParseUniversalDate = strInput
+	End If
+End Function

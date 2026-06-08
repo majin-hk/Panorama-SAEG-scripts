@@ -1,0 +1,192 @@
+// 获取脚本所在组件对象
+var txt = Parent as Value.Equators;
+if (txt == null)
+{
+	PnTrace("Parent 不是 Txt_Test.Txt", FuncScript.TRACE_LEVEL.ERROR);
+	return;
+}
+
+// 状态定义：1=运行，2=不运行
+const int STATUS_RUNNING = 1;
+const int STATUS_NOT_RUNNING = 2;
+
+// 统一写状态的方法，避免重复赋值
+void SetStatus(int code, string raw, bool fault)
+{
+	txt.Device_Status_Code = code;
+	txt.Device_Status_Raw = raw;
+	txt.Comm_Fault = fault;
+}
+
+// 规范化时间字符串：
+// - 去掉前面的 :、=、空格
+// - 把多个空白压缩成一个空格
+string NormalizeTimeText(string value)
+{
+	if (string.IsNullOrEmpty(value))
+		return "";
+
+	value = value.TrimStart(':', '=', ' ').Trim();
+	value = System.Text.RegularExpressions.Regex.Replace(value, "\\s+", " ").Trim();
+	return value;
+}
+
+// 获取文件路径
+string filePath = (txt.Target_Path_Value ?? "").Replace("\"", "").Trim();
+if (string.IsNullOrEmpty(filePath))
+{
+	SetStatus(STATUS_NOT_RUNNING, "NOT_RUNNING | NO_PATH", true);
+	PnTrace("Target_Path_Value 为空", FuncScript.TRACE_LEVEL.WARNING);
+	return;
+}
+
+try
+{
+	// 先判断文件是否存在
+	if (System.IO.File.Exists(filePath) == false)
+	{
+		SetStatus(STATUS_NOT_RUNNING, "NOT_RUNNING | FILE_NOT_FOUND", true);
+		PnTrace("读取失败: 文件不存在 " + filePath, FuncScript.TRACE_LEVEL.ERROR);
+		return;
+	}
+
+	// 读取整个文本文件内容
+	string rawContent = "";
+	using (var fs = new System.IO.FileStream(filePath, System.IO.FileMode.Open, System.IO.FileAccess.Read, System.IO.FileShare.ReadWrite))
+	using (var sr = new System.IO.StreamReader(fs))
+	{
+		rawContent = sr.ReadToEnd();
+	}
+
+	// 文件为空时，判定为不运行
+	if (string.IsNullOrWhiteSpace(rawContent))
+	{
+		SetStatus(STATUS_NOT_RUNNING, "NOT_RUNNING | EMPTY", true);
+		PnTrace("读取失败: 文件内容为空", FuncScript.TRACE_LEVEL.ERROR);
+		return;
+	}
+
+	// 按行拆分文件内容
+	string[] lines = rawContent
+		.Replace("\r\n", "\n")
+		.Replace("\r", "\n")
+		.Split('\n');
+
+	string startText = "";
+	string endText = "";
+
+	// 遍历所有行：
+	// 不要求 Start_time / End_time 固定在第几行
+	// 只要整行里包含关键字就提取
+	for (int i = 0; i < lines.Length; i++)
+	{
+		string line = (lines[i] ?? "").Trim();
+		if (string.IsNullOrEmpty(line))
+			continue;
+
+		// 查找 Start_time，大小写不敏感
+		int startIndex = line.IndexOf("Start_time", System.StringComparison.OrdinalIgnoreCase);
+		if (startIndex >= 0)
+		{
+			startText = NormalizeTimeText(line.Substring(startIndex + "Start_time".Length));
+			continue;
+		}
+
+		// 查找 End_time，大小写不敏感
+		int endIndex = line.IndexOf("End_time", System.StringComparison.OrdinalIgnoreCase);
+		if (endIndex >= 0)
+		{
+			endText = NormalizeTimeText(line.Substring(endIndex + "End_time".Length));
+			continue;
+		}
+	}
+
+	// 没找到开始时间，文件格式不符合预期
+	if (string.IsNullOrEmpty(startText))
+	{
+		SetStatus(STATUS_NOT_RUNNING, "NOT_RUNNING | INVALID_FORMAT", true);
+		PnTrace("读取失败: 未找到 Start_time", FuncScript.TRACE_LEVEL.ERROR);
+		return;
+	}
+
+	// 支持的时间格式
+	string[] formats = new string[]
+	{
+		"dd-MMM-yyyy HH:mm:ss",
+		"d-MMM-yyyy HH:mm:ss"
+	};
+
+	// 解析开始时间
+	DateTime startTime;
+	bool okStart = System.DateTime.TryParseExact(
+		startText,
+		formats,
+		System.Globalization.CultureInfo.InvariantCulture,
+		System.Globalization.DateTimeStyles.None,
+		out startTime
+	);
+
+	// 开始时间解析失败，判定为不运行
+	if (!okStart)
+	{
+		SetStatus(STATUS_NOT_RUNNING, "NOT_RUNNING | INVALID_START_TIME", true);
+		PnTrace("读取失败: Start_time 解析失败, Start_time=[" + startText + "]", FuncScript.TRACE_LEVEL.ERROR);
+		return;
+	}
+
+	// 获取当前时间，用于和开始/结束时间比较
+	DateTime now = System.DateTime.Now;
+
+	// 如果没有结束时间：
+	// 说明设备已经开始，但本次结束时间还没写入
+	// 直接判定为运行
+	if (string.IsNullOrEmpty(endText))
+	{
+		SetStatus(STATUS_RUNNING, "RUNNING | Start=" + startText + " | End=", false);
+		return;
+	}
+
+	// 解析结束时间
+	DateTime endTime;
+	bool okEnd = System.DateTime.TryParseExact(
+		endText,
+		formats,
+		System.Globalization.CultureInfo.InvariantCulture,
+		System.Globalization.DateTimeStyles.None,
+		out endTime
+	);
+
+	// 结束时间解析失败，判定为不运行
+	if (!okEnd)
+	{
+		SetStatus(STATUS_NOT_RUNNING, "NOT_RUNNING | INVALID_END_TIME", true);
+		PnTrace("读取失败: End_time 解析失败, End_time=[" + endText + "]", FuncScript.TRACE_LEVEL.ERROR);
+		return;
+	}
+
+	// 如果结束时间小于开始时间：
+	// 说明开始时间已经更新为本次生产开始
+	// 但结束时间还是上一次旧值
+	// 按运行处理
+	if (endTime < startTime)
+	{
+		SetStatus(STATUS_RUNNING, "RUNNING | Start=" + startText + " | End=" + endText, false);
+		return;
+	}
+
+	// 当前时间位于开始/结束区间内，判定为运行
+	if (now >= startTime && now <= endTime)
+	{
+		SetStatus(STATUS_RUNNING, "RUNNING | Start=" + startText + " | End=" + endText, false);
+		return;
+	}
+
+	// 其余情况统一按不运行处理
+	SetStatus(STATUS_NOT_RUNNING, "NOT_RUNNING | Start=" + startText + " | End=" + endText, false);
+}
+catch (System.Exception ex)
+{
+	// 文件读取或其他异常，统一按不运行处理
+	SetStatus(STATUS_NOT_RUNNING, "NOT_RUNNING | ERROR", true);
+	PnTrace("读取失败: " + ex.Message, FuncScript.TRACE_LEVEL.ERROR);
+}

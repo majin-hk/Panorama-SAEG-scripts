@@ -1,0 +1,65 @@
+if (Table == null)
+{
+	PnTrace("筛选失败：找不到 Table 对象", FuncScript.TRACE_LEVEL.ERROR);
+	return;
+}
+
+System.Collections.Generic.List<string> conditions = new System.Collections.Generic.List<string>();
+
+// 1) ID：精确匹配
+if (DeviceID.Value > 0)
+{
+	conditions.Add("[ID] = " + DeviceID.Value.ToString());
+}
+
+// 2) 设备编号：模糊匹配
+if (!string.IsNullOrEmpty(DeviceNumber.Value))
+{
+	string v = DeviceNumber.Value.Replace("'", "''");
+	conditions.Add("[Device_Number] LIKE '%" + v + "%'");
+}
+
+// 3) 设备名称（英文）：模糊匹配
+if (!string.IsNullOrEmpty(DeviceName_EN.Value))
+{
+	string v = DeviceName_EN.Value.Replace("'", "''");
+	conditions.Add("[Device_Name_en] LIKE '%" + v + "%'");
+}
+
+// 4) 设备名称（中文）：模糊匹配
+if (!string.IsNullOrEmpty(DeviceName_ZH.Value))
+{
+	string v = DeviceName_ZH.Value.Replace("'", "''");
+	conditions.Add("[Device_Name_zh] LIKE '%" + v + "%'");
+}
+
+// 5) 设备类型（英文）：模糊匹配
+if (!string.IsNullOrEmpty(DeviceType_EN.Value))
+{
+	string v = DeviceType_EN.Value.Replace("'", "''");
+	conditions.Add("[Device_Type_en] LIKE '%" + v + "%'");
+}
+
+// 6) 设备类型（中文）：模糊匹配
+if (!string.IsNullOrEmpty(DeviceType_ZH.Value))
+{
+	string v = DeviceType_ZH.Value.Replace("'", "''");
+	conditions.Add("[Device_Type_zh] LIKE '%" + v + "%'");
+}
+
+// 7) 拼接 SQLRequest
+string clause = "";
+if (conditions.Count > 0)
+{
+	clause = "WHERE " + string.Join(" AND ", conditions.ToArray()) + " ORDER BY [ID] DESC";
+}
+else
+{
+	clause = "ORDER BY [ID] DESC";
+}
+
+// 8) 刷新 Viewer
+Table.SQLRequest = clause;
+Table.Read();
+
+PnTrace("筛选完成，当前条件：" + clause, FuncScript.TRACE_LEVEL.INFO);

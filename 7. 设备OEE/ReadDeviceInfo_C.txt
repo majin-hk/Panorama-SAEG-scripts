@@ -1,0 +1,89 @@
+var Edit_DeviceInfo = PnGetObjectEx("Edit_DeviceInfo") as CODRA_DataBase.DBTable;
+var Device = Parent;
+
+if (Edit_DeviceInfo == null)
+{
+	PnTrace("ReadDeviceInfo失败：找不到 Edit_DeviceInfo 对象", FuncScript.TRACE_LEVEL.ERROR);
+	return;
+}
+
+if (Device == null)
+{
+	PnTrace("ReadDeviceInfo失败：找不到 Device 对象", FuncScript.TRACE_LEVEL.ERROR);
+	return;
+}
+
+if (!Edit_DeviceInfo.Active)
+{
+	PnTrace("ReadDeviceInfo失败：Edit_DeviceInfo 未激活", FuncScript.TRACE_LEVEL.ERROR);
+	return;
+}
+
+// 2) 读取固定设备 ID
+string currentId = Device.ID.ToString();
+
+if (string.IsNullOrWhiteSpace(currentId) || currentId == "0")
+{
+	PnTrace("ReadDeviceInfo取消：Device.ID 无效", FuncScript.TRACE_LEVEL.WARNING);
+	return;
+}
+
+// 3) 配置查询条件：按 ID 查询
+Edit_DeviceInfo.UseFilterAndOrderClause = false;
+Edit_DeviceInfo.Field1 = "ID";
+Edit_DeviceInfo.Test1 = CODRA_DataBase.DB_SQL_TEST.EQ;
+Edit_DeviceInfo.Value1 = currentId;
+
+// 清空其他条件
+Edit_DeviceInfo.Field2 = "";
+Edit_DeviceInfo.Value2 = "";
+Edit_DeviceInfo.Field3 = "";
+Edit_DeviceInfo.Value3 = "";
+Edit_DeviceInfo.Field4 = "";
+Edit_DeviceInfo.Value4 = "";
+
+// 4) 执行读取
+var readRes = Edit_DeviceInfo.Read(out error);
+if (readRes != CODRA_DataBase.DB_OPERATION_RESULT.MAINDB_OK)
+{
+	PnTrace("ReadDeviceInfo读取失败：" + error, FuncScript.TRACE_LEVEL.ERROR);
+	return;
+}
+
+if (Edit_DeviceInfo.RecordCount <= 0)
+{
+	PnTrace("ReadDeviceInfo未找到记录，ID=" + currentId, FuncScript.TRACE_LEVEL.WARNING);
+	return;
+}
+
+// 5) 获取字段子对象
+var A2 = PnGetObjectEx("Edit_DeviceInfo/A2") as CODRA_DataBase.DBTableColumn;
+var A3 = PnGetObjectEx("Edit_DeviceInfo/A3") as CODRA_DataBase.DBTableColumn;
+var A4 = PnGetObjectEx("Edit_DeviceInfo/A4") as CODRA_DataBase.DBTableColumn;
+var A5 = PnGetObjectEx("Edit_DeviceInfo/A5") as CODRA_DataBase.DBTableColumn;
+var A6 = PnGetObjectEx("Edit_DeviceInfo/A6") as CODRA_DataBase.DBTableColumn;
+
+if (A2 == null || A3 == null || A4 == null || A5 == null || A6 == null)
+{
+	PnTrace("ReadDeviceInfo失败：找不到 A2~A6 字段子对象", FuncScript.TRACE_LEVEL.ERROR);
+	return;
+}
+
+// 6) 写入设备对象原始属性
+Device.Device_Number = A2.DataBaseValue == null ? "" : A2.DataBaseValue.ToString();
+Device.Device_Name_en = A3.DataBaseValue == null ? "" : A3.DataBaseValue.ToString();
+Device.Device_Name_zh = A4.DataBaseValue == null ? "" : A4.DataBaseValue.ToString();
+Device.Device_Type_en = A5.DataBaseValue == null ? "" : A5.DataBaseValue.ToString();
+Device.Device_Type_zh = A6.DataBaseValue == null ? "" : A6.DataBaseValue.ToString();
+
+// 7) 成功日志
+PnTrace(
+	"ReadDeviceInfo成功：ID=" + currentId +
+	"，Device_Number=" + Device.Device_Number +
+	"，Device_Name_en=" + Device.Device_Name_en +
+	"，Device_Name_zh=" + Device.Device_Name_zh +
+	"，Device_Type_en=" + Device.Device_Type_en +
+	"，Device_Type_zh=" + Device.Device_Type_zh,
+	FuncScript.TRACE_LEVEL.INFO
+);
+

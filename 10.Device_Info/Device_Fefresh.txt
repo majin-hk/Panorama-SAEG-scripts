@@ -1,0 +1,23 @@
+// 1) 清空输入框
+DeviceID.Value = 0;
+DeviceNumber.Value = "";
+DeviceName_EN.Value = "";
+DeviceName_ZH.Value = "";
+DeviceType_EN.Value = "";
+DeviceType_ZH.Value = "";
+
+// 2) 检查 Table
+if (Table == null)
+{
+	PnTrace("刷新失败：未找到 Table 对象", FuncScript.TRACE_LEVEL.ERROR);
+	return;
+}
+
+// 3) 恢复全表
+Table.SQLRequest = "ORDER BY [ID] DESC";
+Table.Read();
+
+// 4) 取消当前选中
+Table.UnSelect();
+
+PnTrace("刷新成功：已清空输入框、取消选中并恢复全表显示", FuncScript.TRACE_LEVEL.INFO);

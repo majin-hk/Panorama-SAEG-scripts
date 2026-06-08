@@ -1,0 +1,36 @@
+Option Explicit
+
+Dim sqlClause
+Dim startValue, endValue
+
+sqlClause = "WHERE 1=1 "
+
+startValue = t_StartTime.Value
+endValue = t_EndTime.Value
+
+' Device
+If Filter_Device.Value <> "" Then
+	sqlClause = sqlClause & "AND [Device Number] = '" & Filter_Device.Value & "' "
+End If
+
+' Job Order
+If Filter_JobOrder.Value <> "" Then
+	sqlClause = sqlClause & "AND [Job Order] = '" & Filter_JobOrder.Value & "' "
+End If
+
+' 时间范围重叠筛选
+If startValue <> "" And endValue <> "" Then
+	sqlClause = sqlClause & _
+		"AND [Start Time] < DATEADD(day, 1, CAST(CAST('" & endValue & "' AS datetime) AS date)) " & _
+		"AND [End Time] >= CAST(CAST('" & startValue & "' AS datetime) AS date) "
+End If
+
+' Comments
+If Filter_Comment.Value <> "" Then
+	sqlClause = sqlClause & "AND Comments = '" & Filter_Comment.Value & "' "
+End If
+
+PnTrace "最终生成的 SQL = " & sqlClause
+
+Table.SQLRequest = sqlClause
+Table.Read

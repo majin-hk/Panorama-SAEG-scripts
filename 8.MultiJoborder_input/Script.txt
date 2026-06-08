@@ -1,0 +1,149 @@
+Option Explicit
+
+' 当前组件对象
+Dim myApp
+' 本次扫码文本
+Dim scanText
+' 当前已保存的多工单文本
+Dim multiText
+' 按行拆分后的数组
+Dim arrLines
+' 循环索引
+Dim i
+' 是否重复
+Dim isDuplicate
+' 清洗后的已有文本
+Dim cleanedText
+
+' =========================================================
+' 1. 获取当前脚本的父对象（即 MultiJoborder_input 组件实例）
+' =========================================================
+Set myApp = PnGetObjectEx("#PARENT")
+
+' =========================================================
+' 2. 判断父对象是否获取成功
+'    如果失败，记录错误并停用脚本
+' =========================================================
+If myApp Is Nothing Then
+	PnTrace ">>> [严重错误] #PARENT 未找到"
+	This.Active = False
+Else
+
+	' =====================================================
+	' 3. 记录本次触发的关键调试信息
+	'    便于在 Tracer 中查看触发来源和输入值
+	' =====================================================
+	PnTrace ">>> [触发] ScanValidateFlag=" & CStr(myApp.ScanValidateFlag) & _
+		" | TriggeringValue=" & CStr(This.TriggeringValue) & _
+		" | ScanInput=[" & CStr(myApp.ScanInput) & "]" & _
+		" | TargetMultiLine=[" & CStr(myApp.TargetMultiLine) & "]"
+
+	' =====================================================
+	' 4. 仅当扫码确认标志为 True 时才继续执行
+	'    否则认为是无效触发，直接忽略
+	' =====================================================
+	If myApp.ScanValidateFlag <> True Then
+		PnTrace ">>> [忽略] 非 True 触发"
+		This.Active = False
+	Else
+
+		' =================================================
+		' 5. 读取本次扫码输入内容
+		'    并清除其中可能携带的回车/换行，再做首尾去空格
+		'    这样可以避免扫码枪附带隐藏换行影响查重
+		' =================================================
+		scanText = CStr(myApp.ScanInput & "")
+		scanText = Replace(scanText, vbCr, "")
+		scanText = Replace(scanText, vbLf, "")
+		scanText = Trim(scanText)
+
+		' =================================================
+		' 6. 读取当前已有的多工单字符串
+		' =================================================
+		multiText = CStr(myApp.TargetMultiLine & "")
+
+		' =================================================
+		' 7. 兼容处理：
+		'    如果当前值是字符串 "Null" / "null"，
+		'    则视为空字符串
+		' =================================================
+		If multiText = "Null" Or multiText = "null" Then
+			multiText = ""
+		End If
+
+		' =================================================
+		' 8. 清洗已有的多工单文本：
+		'    - 去掉首尾空格
+		'    - 去掉首部连续空行
+		'    - 去掉尾部连续空行
+		'    避免第一行或最后一行为空
+		' =================================================
+		cleanedText = Trim(multiText)
+
+		Do While Len(cleanedText) >= 2 And Left(cleanedText, 2) = vbCrLf
+			cleanedText = Mid(cleanedText, 3)
+		Loop
+
+		Do While Len(cleanedText) >= 2 And Right(cleanedText, 2) = vbCrLf
+			cleanedText = Left(cleanedText, Len(cleanedText) - 2)
+		Loop
+
+		multiText = cleanedText
+
+		' 默认认为本次扫码不是重复项
+		isDuplicate = False
+
+		' =================================================
+		' 9. 仅当本次扫码内容非空时才进行后续处理
+		' =================================================
+		If scanText <> "" Then
+
+			' =============================================
+			' 10. 如果已有多工单内容，则逐行拆分并查重
+			'     - 忽略空行
+			'     - 完全相同则视为重复
+			' =============================================
+			If multiText <> "" Then
+				arrLines = Split(multiText, vbCrLf)
+
+				For i = 0 To UBound(arrLines)
+					If Trim(CStr(arrLines(i))) <> "" Then
+						If Trim(CStr(arrLines(i))) = scanText Then
+							isDuplicate = True
+							Exit For
+						End If
+					End If
+				Next
+			End If
+
+			' =============================================
+			' 11. 非重复时追加到 TargetMultiLine
+			'     - 如果原来为空：直接赋值
+			'     - 如果原来不为空：先换行再追加
+			' =============================================
+			If Not isDuplicate Then
+				If multiText = "" Then
+					myApp.TargetMultiLine = scanText
+				Else
+					myApp.TargetMultiLine = multiText & vbCrLf & scanText
+				End If
+
+				PnTrace ">>> [成功] TargetMultiLine=[" & CStr(myApp.TargetMultiLine) & "]"
+			Else
+				PnTrace ">>> [重复] 重复扫码被拦截: [" & scanText & "]"
+			End If
+		Else
+			' =============================================
+			' 12. 本次扫码内容为空，不做追加
+			' =============================================
+			PnTrace ">>> [警告] ScanInput 为空"
+		End If
+
+		' =================================================
+		' 13. 无论是否追加成功，最后都清空输入框，
+		'     并将扫码确认标志复位为 False
+		' =================================================
+		myApp.ScanInput = ""
+		myApp.ScanValidateFlag = False
+	End If
+End If

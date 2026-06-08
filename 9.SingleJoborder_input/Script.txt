@@ -1,0 +1,51 @@
+'Option Explicit
+
+'Dim myApp
+'Dim scanText
+
+'' 获取当前组件对象（SingleJoborder_input 自身）
+'Set myApp = PnGetObjectEx("#PARENT")
+
+'' 读取扫码框内容
+'scanText = myApp.ScanInput
+
+'' 如果扫码内容不为空，则直接写入目标工单号
+'If scanText <> "" Then
+'    myApp.TargetJobOrder = scanText
+'End If
+
+'' 清空输入框，并复位扫码确认标志
+'myApp.ScanInput = ""
+'myApp.ScanValidateFlag = False
+Option Explicit
+
+Dim myApp
+Dim scanText
+
+Set myApp = PnGetObjectEx("#PARENT")
+
+If myApp Is Nothing Then
+	PnTrace ">>> [严重错误] #PARENT 未找到"
+	This.Active = False
+End If
+
+PnTrace ">>> [触发] ScanValidateFlag=" & CStr(myApp.ScanValidateFlag) & _
+	" | TriggeringValue=" & CStr(This.TriggeringValue) & _
+	" | ScanInput=[" & CStr(myApp.ScanInput) & "]"
+
+If myApp.ScanValidateFlag <> True Then
+	PnTrace ">>> [忽略] 非 True 触发"
+	This.Active = False
+End If
+
+scanText = Trim(CStr(myApp.ScanInput & ""))
+
+If scanText <> "" Then
+	myApp.TargetJobOrder = scanText
+	PnTrace ">>> [成功] TargetJobOrder=[" & CStr(myApp.TargetJobOrder) & "]"
+Else
+	PnTrace ">>> [警告] ScanInput 为空"
+End If
+
+myApp.ScanInput = ""
+myApp.ScanValidateFlag = False

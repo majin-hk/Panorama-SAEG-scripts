@@ -1,0 +1,88 @@
+var Reason_SET = (PnGetObjectEx("../#PARENT") as Device_SCADA.Reason_SET);
+Comment_1.InputList = Reason_SET.CommentStore;
+Comment_1.Value = "";
+
+string rebuildError;
+string sep = Comment_1.Separator;
+
+if (sep == null || sep == "")
+{
+	sep = ";";
+	Comment_1.Separator = sep;
+}
+
+var rebuildDB = PnGetObjectEx("../Edit_DB") as CODRA_DataBase.DBTable;
+var colComment = PnGetObjectEx("../Edit_DB/A2") as CODRA_DataBase.DBTableColumn;
+
+if (rebuildDB == null || colComment == null)
+{
+	PnTrace("重建下拉框失败：无法获取数据库对象。", FuncScript.TRACE_LEVEL.ERROR);
+	return;
+}
+
+// 清理旧条件
+rebuildDB.UseFilterAndOrderClause = true;
+rebuildDB.FilterAndOrderClause = "ORDER BY ID ASC";
+rebuildDB.MaxRecords = 0;
+rebuildDB.Field1 = "";
+rebuildDB.Value1 = "";
+rebuildDB.Field2 = "";
+rebuildDB.Value2 = "";
+rebuildDB.Field3 = "";
+rebuildDB.Value3 = "";
+rebuildDB.Field4 = "";
+rebuildDB.Value4 = "";
+
+// 先读取整表
+rebuildDB.Read(out rebuildError);
+
+if (rebuildError != "")
+{
+	PnTrace("重建下拉框失败：" + rebuildError, FuncScript.TRACE_LEVEL.ERROR);
+	return;
+}
+
+string inputList = "";
+
+if (rebuildDB.RecordCount > 0)
+{
+	// 先处理当前记录
+	if (colComment.DataBaseValue != null)
+	{
+		string commentText = colComment.DataBaseValue.ToString().Trim();
+
+		if (commentText != "")
+			inputList = commentText;
+	}
+
+	// 再逐条读后续记录
+	while (rebuildDB.GoToNextRecord())
+	{
+		if (colComment.DataBaseValue == null)
+			continue;
+
+		string commentText = colComment.DataBaseValue.ToString().Trim();
+
+		if (commentText == "")
+			continue;
+
+		if (inputList == "")
+			inputList = commentText;
+		else
+			inputList = inputList + sep + commentText;
+	}
+}
+
+// 清理状态
+rebuildDB.UseFilterAndOrderClause = false;
+rebuildDB.FilterAndOrderClause = "";
+rebuildDB.MaxRecords = 0;
+
+// 同步到缓存和下拉框
+Reason_SET.CommentStore = inputList;
+Comment_1.InputList = Reason_SET.CommentStore;
+Comment_1.Value = "";
+
+PnTrace("Reason_SET.CommentStore = " + Reason_SET.CommentStore, FuncScript.TRACE_LEVEL.INFO);
+PnTrace("Comment_1.InputList = " + Comment_1.InputList, FuncScript.TRACE_LEVEL.INFO);
+PnTrace("下拉框重建完成。", FuncScript.TRACE_LEVEL.INFO);
