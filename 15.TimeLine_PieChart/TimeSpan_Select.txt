@@ -1,0 +1,74 @@
+Option Explicit
+
+' === 变量定义 ===
+Dim oTimeLineDB, oGraph
+Dim dDate, dStartBase, dTimeSpan, dTimeFraction
+Dim dTimeZoneOffset, sTimeSpanSelection, sTimeSelection
+' 定义两组起止时间变量，分别用于不同的用途
+Dim dLocalStart, dLocalEnd    ' 用于数据库查询 (Local Time)
+Dim dGraphStart, dGraphEnd    ' 用于图表坐标 (Offset Time)
+
+' 1. 获取当前选中的 TimeSpan
+sTimeSpanSelection = CStr(PnGetValue("../#PARENT.TimeLine_TimeSpan"))
+
+' 解析 TimeSpan
+Select Case sTimeSpanSelection
+	Case "1h" : dTimeSpan = 1.0 / 24.0
+	Case "8h" : dTimeSpan = 8.0 / 24.0
+	Case "12h": dTimeSpan = 0.5
+	Case "1day": dTimeSpan = 1.0
+	Case Else : dTimeSpan = 1.0
+End Select
+
+' 2. 读取日期控件的值
+dDate = PnGetValue("../#PARENT.TimeLine_DateSelect")
+
+' 3. 读取 Time 控件的值
+sTimeSelection = CStr(PnGetValue("../#PARENT.TimeLine_TimeSelect"))
+
+' 解析时间字符串 ("08:00" -> 0.333...)
+dTimeFraction = 0.0 ' 默认 0点
+On Error Resume Next
+If sTimeSelection <> "" Then
+	dTimeFraction = CDbl(CDate(sTimeSelection)) - Int(CDbl(CDate(sTimeSelection)))
+End If
+On Error GoTo 0
+
+' 4. 计算起止时间 (关键修改部分)
+dTimeZoneOffset = 8.0 / 24.0
+
+' 4.1 计算【本地起止时间】 -> 用于数据库查询
+' 逻辑：用户选了 08:00，这里就是 08:00
+dLocalStart = Int(CDbl(dDate)) + dTimeFraction
+dLocalEnd = dLocalStart + dTimeSpan
+
+' 4.2 计算【图表坐标时间】 -> 用于 X 轴显示
+' 逻辑：为了抵消控件自动 +8h 的效果，我们需要手动 -8h
+dGraphStart = dLocalStart - dTimeZoneOffset
+dGraphEnd = dLocalEnd - dTimeZoneOffset
+
+Set oGraph = PnGetObjectEx("Graph")
+
+' === 核心逻辑：应用坐标轴 ===
+' 必须使用减去了时区的时间
+oGraph.XAxisMin = dGraphStart
+oGraph.XAxisMax = dGraphEnd
+oGraph.Refresh ' 建议强制刷新图表
+
+' === 额外处理：历史数据加载 ===
+' 只要选中的日期不是今天，或者你在查看历史数据
+If Int(CDbl(dDate)) <> Int(CDbl(Now)) Then
+	Set oTimeLineDB = PnGetObjectEx("Graph/TimeLineDB")
+    
+	' === 更新数据库查询范围 ===
+	' 【关键】：这里使用 dLocalStart (不减时区)
+	oTimeLineDB.DateStart = dLocalStart
+	
+	' 结束时间建议多加 1 分钟 (1.0/1440.0)，防止漏掉最后几秒的数据
+	oTimeLineDB.DateEnd = dLocalEnd + (1.0 / 1440.0)
+    
+	oTimeLineDB.readasync
+Else
+	' 实时模式
+	' PnGetObjectEx("Graph/Process").ReadAsync 
+End If
