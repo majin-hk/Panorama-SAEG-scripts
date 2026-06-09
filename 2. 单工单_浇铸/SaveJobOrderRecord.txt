@@ -5,7 +5,7 @@
 'Dim sRecordUser
 'Dim oEditObject
 
-'' 1. 获取父对象引用
+'' 1. 获取父对象引用，测试
 'Set oParent = PnGetObjectEx("#PARENT")
 
 'If (oParent Is Nothing) Then
