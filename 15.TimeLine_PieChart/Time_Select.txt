@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 Option Explicit
 
 ' === 变量定义 ===
@@ -74,4 +75,82 @@ Else
 	' PnGetObjectEx("Graph/Process").DateStart = dLocalStart
 	' PnGetObjectEx("Graph/Process").DateEnd = Now ' 或者 dLocalEnd
 	' PnGetObjectEx("Graph/Process").ReadAsync
+=======
+Option Explicit
+
+' === 变量定义 ===
+Dim oTimeLineDB, oGraph
+Dim dDate, dStartBase
+Dim dTimeSpan, dTimeFraction
+Dim dTimeZoneOffset
+Dim sTimeSpanSelection, sTimeSelection
+Dim dLocalStart, dLocalEnd      ' 用于数据库查询 (本地时间)
+Dim dGraphStart, dGraphEnd      ' 用于图表坐标轴 (修正偏移后的时间)
+
+' 1. 获取当前脚本触发的 Time 值 (例如 "08:00")
+sTimeSelection = CStr(PnGetValue("../#PARENT.TimeLine_TimeSelect"))
+
+' 将时间字符串转换为天的小数
+On Error Resume Next
+dTimeFraction = CDbl(CDate(sTimeSelection)) - Int(CDbl(CDate(sTimeSelection)))
+If Err.Number <> 0 Then dTimeFraction = 0.0 ' 出错则默认为 00:00
+On Error GoTo 0
+
+' 2. 读取 TimeSpan 控件的值
+sTimeSpanSelection = CStr(PnGetValue("../#PARENT.TimeLine_TimeSpan"))
+Select Case sTimeSpanSelection
+	Case "1h" : dTimeSpan = 1.0 / 24.0
+	Case "8h" : dTimeSpan = 8.0 / 24.0
+	Case "12h": dTimeSpan = 0.5
+	Case "1day": dTimeSpan = 1.0
+	Case Else : dTimeSpan = 1.0
+End Select
+
+' 3. 读取 Date 控件的值
+dDate = PnGetValue("../#PARENT.TimeLine_DateSelect")
+
+' 4. 计算基础时间参数
+dTimeZoneOffset = 8.0 / 24.0
+dStartBase = Int(CDbl(dDate)) ' 取日期的 00:00
+
+' === 关键修改：分开计算两种时间 ===
+
+' A. 计算【本地时间】 (用于数据库查询)
+' 逻辑：用户选了几点就是几点 (例如 2025-12-30 08:00)
+dLocalStart = dStartBase + dTimeFraction
+dLocalEnd = dLocalStart + dTimeSpan
+
+' B. 计算【图表坐标时间】 (用于 X 轴显示)
+' 逻辑：为了抵消控件自动加的8小时，我们需要手动减去8小时
+dGraphStart = dLocalStart - dTimeZoneOffset
+dGraphEnd = dLocalEnd - dTimeZoneOffset
+
+
+' === 5. 应用设置 ===
+Set oGraph = PnGetObjectEx("Graph")
+
+' 设置图表坐标轴 (使用减去时区后的值)
+oGraph.XAxisMin = dGraphStart
+oGraph.XAxisMax = dGraphEnd
+oGraph.Refresh ' 建议强制刷新
+
+' === 6. 历史数据加载逻辑 ===
+' 只要选中的日期不是今天，或者处于历史模式
+If Int(CDbl(dDate)) <> Int(CDbl(Now)) Then
+	Set oTimeLineDB = PnGetObjectEx("Graph/TimeLineDB")
+    
+	' 更新数据库查询范围 (使用本地时间，不减时区！)
+	oTimeLineDB.DateStart = dLocalStart
+	' 结束时间多加 1 分钟 (1.0/1440.0) 防止漏掉最后一秒的数据
+	oTimeLineDB.DateEnd = dLocalEnd + (1.0 / 1440.0)
+    
+	oTimeLineDB.readasync
+Else
+	' 实时模式：
+	' 如果你的实时曲线只是显示缓存，不需要动作。
+	' 如果实时曲线也需要查库(查询当天数据)，则需要加上：
+	' PnGetObjectEx("Graph/Process").DateStart = dLocalStart
+	' PnGetObjectEx("Graph/Process").DateEnd = Now ' 或者 dLocalEnd
+	' PnGetObjectEx("Graph/Process").ReadAsync
+>>>>>>> 4230afc8073379fa307e566066d3eaaa77e26807
 End If

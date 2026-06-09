@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 Option Explicit
 
 ' === 变量定义 ===
@@ -110,3 +111,117 @@ Else
 	oGraph.Refresh
 End If
 
+=======
+Option Explicit
+
+' === 变量定义 ===
+Dim oTimeLineDB, oGraph
+Dim dDate, dStartBase, dTimeSpan
+Dim dTimeZoneOffset, sTimeSpanSelection
+
+' 定义序列对象变量
+Dim oSerProc1, oSerProc2, oSerProc3
+Dim oSerHist1, oSerHist2, oSerHist3
+
+' === 1. 获取对象引用 ===
+Set oSerProc1 = PnGetObjectEx("Graph/Process/Ser1")
+Set oSerProc2 = PnGetObjectEx("Graph/Process/Ser2")
+Set oSerProc3 = PnGetObjectEx("Graph/Process/Ser3")
+
+Set oSerHist1 = PnGetObjectEx("Graph/TimeLineDB/Ser1")
+Set oSerHist2 = PnGetObjectEx("Graph/TimeLineDB/Ser2")
+Set oSerHist3 = PnGetObjectEx("Graph/TimeLineDB/Ser3")
+
+Set oGraph = PnGetObjectEx("Graph")
+
+' === 2. 获取输入值 ===
+dDate = PnGetValue("../#PARENT.TimeLine_DateSelect")
+sTimeSpanSelection = CStr(PnGetValue("../#PARENT.TimeLine_TimeSpan"))
+
+' === 3. 解析时间跨度 ===
+Select Case sTimeSpanSelection
+	Case "1h" : dTimeSpan = 1.0 / 24.0
+	Case "8h" : dTimeSpan = 8.0 / 24.0
+	Case "12h": dTimeSpan = 0.5
+	Case "1day": dTimeSpan = 1.0
+	Case Else : dTimeSpan = 1.0
+End Select
+
+' === 4. 设置基础参数 ===
+dTimeZoneOffset = 8.0 / 24.0
+dStartBase = Int(CDbl(dDate)) ' 获取选中日期的 00:00
+
+' === 5. 核心逻辑：切换 实时/历史 ===
+If Int(CDbl(dDate)) <> Int(CDbl(Now)) Then
+	' ==============================
+	' >>> 历史模式 (History Mode)
+	' ==============================
+    
+	' --- 隐藏实时序列 & 隐藏图例 ---
+	oSerProc1.Active = False
+	oSerProc1.ShowInLegend = False
+	oSerProc2.Active = False
+	oSerProc2.ShowInLegend = False
+	oSerProc3.Active = False
+	oSerProc3.ShowInLegend = False
+    
+	' --- 显示历史序列 & 显示图例 ---
+	oSerHist1.Active = True
+	oSerHist1.ShowInLegend = True
+	oSerHist2.Active = True
+	oSerHist2.ShowInLegend = True
+	oSerHist3.Active = True
+	oSerHist3.ShowInLegend = True
+    
+	' --- 设置数据和坐标 ---
+	Set oTimeLineDB = PnGetObjectEx("Graph/TimeLineDB")
+    
+	' 【关键修改 1：查询范围】
+	' 这里的 DateStart/End 不要减时区！使用本地时间 00:00 即可，系统会自动处理查询。
+	' 多加 1分钟 (1.0/1440.0) 是为了防止漏掉 23:59:59 的数据。
+	oTimeLineDB.DateStart = dStartBase
+	oTimeLineDB.DateEnd = dStartBase + dTimeSpan + (1.0 / 1440.0)
+    
+	' 【关键修改 2：图表坐标】
+	' 这里的 XAxisMin/Max 必须减时区！因为图表控件视觉上会自动 +8 小时，我们手动减掉它。
+	oGraph.XAxisMin = dStartBase - dTimeZoneOffset
+	oGraph.XAxisMax = dStartBase + dTimeSpan - dTimeZoneOffset
+    
+	oTimeLineDB.readasync
+	oGraph.Refresh ' 建议强制刷新
+
+Else
+	' ==============================
+	' >>> 实时模式 (Real-time Mode)
+	' ==============================
+    
+	' --- 显示实时序列 & 显示图例 ---
+	
+	Pnsleep 1000
+	oSerProc1.Active = True
+	oSerProc1.ShowInLegend = True
+	oSerProc2.Active = True
+	oSerProc2.ShowInLegend = True
+	oSerProc3.Active = True
+	oSerProc3.ShowInLegend = True
+    
+	' --- 隐藏历史序列 & 隐藏图例 ---
+	oSerHist1.Active = False
+	oSerHist1.ShowInLegend = False
+	oSerHist2.Active = False
+	oSerHist2.ShowInLegend = False
+	oSerHist3.Active = False
+	oSerHist3.ShowInLegend = False
+    
+	' --- 设置坐标 ---
+	dStartBase = Int(CDbl(Now)) ' 获取今天 00:00
+    
+	' 实时模式坐标轴同样需要减时区
+	oGraph.XAxisMin = dStartBase - dTimeZoneOffset
+	oGraph.XAxisMax = dStartBase + dTimeSpan - dTimeZoneOffset
+    
+	'PnGetObjectEx("Graph/Process").ReadAsync
+	oGraph.Refresh
+End If
+
+>>>>>>> 4230afc8073379fa307e566066d3eaaa77e26807

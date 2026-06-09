@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 Option Explicit
 
 Dim oChartHistoryDB, oChartProcess
@@ -94,4 +95,102 @@ Else
     
 	'    oChartProcess.ReadAsync
 
+=======
+Option Explicit
+
+Dim oChartHistoryDB, oChartProcess
+Dim dDate, dStartBase
+Dim dBuffer
+
+' 1. 获取触发日期
+dDate = PnGetValue("../#PARENT.TimeLine_DateSelect")
+
+' 获取选中日期的 00:00 (本地时间)
+dStartBase = Int(CDbl(dDate)) 
+
+' 定义一个缓冲时间 (10分钟)，用于确保 DateEnd 能包住 23:59:59 的数据
+dBuffer = 10.0 / 1440.0 
+
+' === 判断逻辑：历史 vs 实时 ===
+If dStartBase <> Int(CDbl(Now)) Then
+	' ==============================
+	'       历史模式 (History)
+	' ==============================
+    
+	' 1. 切换系列显示
+	' 隐藏实时系列
+	PnGetObjectEx("Chart/Process/Ser1").Active = False
+	PnGetObjectEx("Chart/Process/Ser1").ShowInLegend = False 
+	PnGetObjectEx("Chart/Process/Ser2").Active = False
+	PnGetObjectEx("Chart/Process/Ser2").ShowInLegend = False
+	PnGetObjectEx("Chart/Process/Ser3").Active = False
+	PnGetObjectEx("Chart/Process/Ser3").ShowInLegend = False
+	PnGetObjectEx("Chart/Process/Ser4").Active = False
+	PnGetObjectEx("Chart/Process/Ser4").ShowInLegend = False
+    
+	' 显示历史系列
+	PnGetObjectEx("Chart/History/Ser1").Active = True
+	PnGetObjectEx("Chart/History/Ser1").ShowInLegend = True
+	PnGetObjectEx("Chart/History/Ser2").Active = True
+	PnGetObjectEx("Chart/History/Ser2").ShowInLegend = True
+	PnGetObjectEx("Chart/History/Ser3").Active = True
+	PnGetObjectEx("Chart/History/Ser3").ShowInLegend = True
+	PnGetObjectEx("Chart/History/Ser4").Active = True
+	PnGetObjectEx("Chart/History/Ser4").ShowInLegend = True
+    
+	' 2. 设置历史数据查询范围
+	Set oChartHistoryDB = PnGetObjectEx("Chart/History")
+    
+	' 【关键点】：使用本地时间，不减时区
+	oChartHistoryDB.DateStart = dStartBase
+    
+	' 结束时间：次日 00:00 + 1分钟缓冲
+	' 这样 2025-12-29 23:59:59 的数据肯定会被包含在内
+	'oChartHistoryDB.DateEnd = DateAdd("d", 1, dStartBase) + dBuffer
+	oChartHistoryDB.DateEnd = dStartBase + 1.0 + dBuffer
+	
+	' 3. 触发读取
+	oChartHistoryDB.readasync
+	
+	' 建议刷新一下图表容器
+	
+Else
+	' ==============================
+	'       实时模式 (Real-time)
+	' ==============================
+    
+	' 1. 切换系列显示
+	' 显示实时系列
+	Pnsleep 1000
+	PnGetObjectEx("Chart/Process/Ser1").Active = True
+	PnGetObjectEx("Chart/Process/Ser1").ShowInLegend = True
+	PnGetObjectEx("Chart/Process/Ser2").Active = True
+	PnGetObjectEx("Chart/Process/Ser2").ShowInLegend = True
+	PnGetObjectEx("Chart/Process/Ser3").Active = True
+	PnGetObjectEx("Chart/Process/Ser3").ShowInLegend = True
+	PnGetObjectEx("Chart/Process/Ser4").Active = True
+	PnGetObjectEx("Chart/Process/Ser4").ShowInLegend = True
+    
+	' 隐藏历史系列
+	PnGetObjectEx("Chart/History/Ser1").Active = False
+	PnGetObjectEx("Chart/History/Ser1").ShowInLegend = False
+	PnGetObjectEx("Chart/History/Ser2").Active = False
+	PnGetObjectEx("Chart/History/Ser2").ShowInLegend = False
+	PnGetObjectEx("Chart/History/Ser3").Active = False
+	PnGetObjectEx("Chart/History/Ser3").ShowInLegend = False
+	PnGetObjectEx("Chart/History/Ser4").Active = False
+	PnGetObjectEx("Chart/History/Ser4").ShowInLegend = False
+    
+	' 2. 实时数据处理
+	Set oChartProcess = PnGetObjectEx("Chart/Process")
+	
+	' 【建议】：如果您的实时饼图也是通过查询“从今天0点到现在”的数据来显示的
+	' 那么建议也在这里显式设置时间，防止它停留在上一次的历史时间段
+	' 如果它只是直接绑定 PLC 变量，下面这两行设置日期的代码可以删掉
+	'oChartProcess.DateStart = Int(CDbl(Now)) ' 今天 00:00
+	'oChartProcess.DateEnd = Now              ' 当前时刻
+    
+	'    oChartProcess.ReadAsync
+
+>>>>>>> 4230afc8073379fa307e566066d3eaaa77e26807
 End If
