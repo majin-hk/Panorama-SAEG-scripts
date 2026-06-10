@@ -1,0 +1,72 @@
+var dev = PnGetObjectEx("../#PARENT") as Device_SCADA.Device1;
+
+if (dev == null)
+{
+	PnTrace("无法获取父设备对象。", FuncScript.TRACE_LEVEL.ERROR);
+	return;
+}
+
+string batchJobList = dev.Batch_Job_List;
+string deviceName = dev.BatchNumber_DeviceName;
+string today = PnNow().ToString("yyMMdd");
+
+if (string.IsNullOrEmpty(batchJobList))
+{
+	PnTrace("批次号生成失败：Batch_Job_List 为空。", FuncScript.TRACE_LEVEL.ERROR);
+	return;
+}
+
+if (string.IsNullOrEmpty(deviceName))
+{
+	PnTrace("批次号生成失败：设备名称为空。", FuncScript.TRACE_LEVEL.ERROR);
+	return;
+}
+
+// 1) 取第一个工单
+string firstJob = batchJobList;
+
+// 如果是多行文本，取第一行
+int lineBreakIndex = firstJob.IndexOf('\n');
+if (lineBreakIndex >= 0)
+{
+	firstJob = firstJob.Substring(0, lineBreakIndex);
+}
+
+// 去掉回车和首尾空格
+firstJob = firstJob.Replace("\r", "").Trim();
+
+if (string.IsNullOrEmpty(firstJob))
+{
+	PnTrace("批次号生成失败：第一个工单为空。", FuncScript.TRACE_LEVEL.ERROR);
+	return;
+}
+
+// 2) 取前2位作为产品型号
+if (firstJob.Length < 2)
+{
+	PnTrace("批次号生成失败：工单长度不足2位，无法提取产品型号。工单=" + firstJob, FuncScript.TRACE_LEVEL.ERROR);
+	return;
+}
+
+string productModel = firstJob.Substring(0, 2).ToUpper();
+
+// 写回当前产品型号
+dev.CurrentProductModel = productModel;
+
+// 3) 计算顺序号
+int seq = 1;
+
+if (dev.LastBatchDate == today)
+{
+	seq = dev.LastBatchSeq + 1;
+}
+
+// 4) 生成批次号（中横杠）
+string batchNo = deviceName.ToUpper() + "-" + productModel + "-" + today + "-" + seq.ToString("D2");
+
+// 5) 写回结果
+dev.LastBatchDate = today;
+dev.LastBatchSeq = seq;
+dev.CurrentBatchNumber = batchNo;
+
+PnTrace("生成FPI批次号: " + batchNo, FuncScript.TRACE_LEVEL.INFO);

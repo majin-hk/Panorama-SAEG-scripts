@@ -1,0 +1,98 @@
+var dev = PnGetObjectEx("../#PARENT") as Device_SCADA.Device1;
+
+if (dev == null)
+{
+	PnTrace("无法获取父设备对象。", FuncScript.TRACE_LEVEL.ERROR);
+	return;
+}
+
+string batchJobList = dev.Batch_Job_List;
+string deviceName = dev.BatchNumber_DeviceName;
+string processRuleRaw = dev.CurrentProcessRule;
+string today = PnNow().ToString("yyMMdd");
+
+if (string.IsNullOrEmpty(batchJobList))
+{
+	PnTrace("批次号生成失败：Batch_Job_List 为空。", FuncScript.TRACE_LEVEL.ERROR);
+	return;
+}
+
+if (string.IsNullOrEmpty(deviceName))
+{
+	PnTrace("批次号生成失败：设备名称为空。", FuncScript.TRACE_LEVEL.ERROR);
+	return;
+}
+
+if (string.IsNullOrEmpty(processRuleRaw))
+{
+	PnTrace("批次号生成失败：热处理制度为空。", FuncScript.TRACE_LEVEL.ERROR);
+	return;
+}
+
+// 1) 取第一个工单
+string firstJob = batchJobList;
+
+// 如果是多行文本，取第一行
+int lineBreakIndex = firstJob.IndexOf('\n');
+if (lineBreakIndex >= 0)
+{
+	firstJob = firstJob.Substring(0, lineBreakIndex);
+}
+
+// 去掉回车和空格
+firstJob = firstJob.Replace("\r", "").Trim();
+
+if (string.IsNullOrEmpty(firstJob))
+{
+	PnTrace("批次号生成失败：第一个工单为空。", FuncScript.TRACE_LEVEL.ERROR);
+	return;
+}
+
+// 2) 取前2位作为产品型号
+if (firstJob.Length < 2)
+{
+	PnTrace("批次号生成失败：工单长度不足2位，无法提取产品型号。工单=" + firstJob, FuncScript.TRACE_LEVEL.ERROR);
+	return;
+}
+
+string productModel = firstJob.Substring(0, 2).ToUpper();
+
+// 写回当前产品型号
+dev.CurrentProductModel = productModel;
+
+// 3) 拆分热处理制度，只取分号前半段
+string processRule = processRuleRaw;
+int semicolonIndex = processRuleRaw.IndexOf(';');
+if (semicolonIndex >= 0)
+{
+	processRule = processRuleRaw.Substring(0, semicolonIndex);
+}
+
+processRule = processRule.Trim();
+
+if (string.IsNullOrEmpty(processRule))
+{
+	PnTrace("批次号生成失败：热处理制度拆分后为空。原值=" + processRuleRaw, FuncScript.TRACE_LEVEL.ERROR);
+	return;
+}
+
+// 如果你希望制度也统一大写，可取消下面这行注释
+//processRule = processRule.ToUpper();
+
+// 4) 计算顺序号
+int seq = 1;
+
+if (dev.LastBatchDate == today)
+{
+	seq = dev.LastBatchSeq + 1;
+}
+
+// 5) 生成批次号（使用中横杠）
+string batchNo = deviceName.ToUpper() + "-" + productModel + "-" + processRule + "-" + today + "-" + seq.ToString("D2");
+
+// 6) 写回结果
+dev.LastBatchDate = today;
+dev.LastBatchSeq = seq;
+dev.CurrentBatchNumber = batchNo;
+
+PnTrace("生成热处理批次号: " + batchNo, FuncScript.TRACE_LEVEL.INFO);
